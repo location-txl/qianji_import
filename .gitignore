@@ -20,6 +20,10 @@
 # production
 /build
 
+# local qianji configuration
+/data/config.json
+/data/*.tmp
+
 # misc
 .DS_Store
 *.pem
