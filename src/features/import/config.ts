@@ -1,6 +1,6 @@
 import type { AppConfig, CategoryRule, SourcePlatform } from "./types";
 
-export const COMMON_ACCOUNT_OPTIONS = ["微信", "支付宝", "现金", "银行卡", "信用卡"];
+export const COMMON_ACCOUNT_OPTIONS = [];
 
 export const DEFAULT_CONFIG: AppConfig = {
   accounts: [...COMMON_ACCOUNT_OPTIONS],
