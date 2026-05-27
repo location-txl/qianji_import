@@ -463,7 +463,7 @@
 
 .batchBar {
   display: grid;
-  grid-template-columns: auto repeat(4, minmax(105px, 1fr)) auto auto auto;
+  grid-template-columns: auto repeat(4, minmax(105px, 1fr)) auto auto auto auto;
   align-items: center;
   gap: 7px;
   margin-bottom: 12px;

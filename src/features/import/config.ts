@@ -1,4 +1,4 @@
-import type { AppConfig, CategoryRule, SourcePlatform } from "./types";
+import type { AppConfig, CategoryRule, ExcludeRule, SourcePlatform } from "./types";
 
 export const COMMON_ACCOUNT_OPTIONS:string[] = [];
 
@@ -11,6 +11,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   },
   sourceCategoryMappings: {},
   categoryRules: [],
+  excludeRules: [],
 };
 
 const SOURCES = new Set<SourcePlatform | "all">(["all", "alipay", "wechat"]);
@@ -72,6 +73,34 @@ function validateRule(value: unknown, index: number): CategoryRule {
   };
 }
 
+function validateExcludeRule(value: unknown, index: number): ExcludeRule {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`excludeRules[${index}] 格式错误`);
+  }
+
+  const rule = value as Record<string, unknown>;
+  const id = requireString(rule.id, `excludeRules[${index}].id`);
+  const source = requireString(rule.source, `excludeRules[${index}].source`);
+  const keyword = requireString(rule.keyword ?? "", `excludeRules[${index}].keyword`);
+  const startTime = requireString(rule.startTime ?? "", `excludeRules[${index}].startTime`);
+  const endTime = requireString(rule.endTime ?? "", `excludeRules[${index}].endTime`);
+
+  if (!id || !SOURCES.has(source as SourcePlatform | "all")) {
+    throw new Error(`excludeRules[${index}] 的来源无效`);
+  }
+  if ((startTime && !TIME_PATTERN.test(startTime)) || (endTime && !TIME_PATTERN.test(endTime))) {
+    throw new Error(`excludeRules[${index}] 时间必须是 HH:mm`);
+  }
+
+  return {
+    id,
+    source: source as SourcePlatform | "all",
+    keyword,
+    startTime,
+    endTime,
+  };
+}
+
 /**
  * 校验并清理磁盘或接口收到的配置，避免错误配置影响下一次转换。
  *
@@ -106,6 +135,10 @@ export function parseAppConfig(value: unknown): AppConfig {
         throw new Error("categoryRules 必须是数组");
       })();
 
+  const excludeRules = Array.isArray(input.excludeRules)
+    ? input.excludeRules.map(validateExcludeRule)
+    : [];
+
   const accountSet = new Set([...accounts, ...COMMON_ACCOUNT_OPTIONS]);
   Object.values(paymentMethodMappings).forEach((account) => accountSet.add(account));
 
@@ -114,5 +147,6 @@ export function parseAppConfig(value: unknown): AppConfig {
     paymentMethodMappings,
     sourceCategoryMappings,
     categoryRules,
+    excludeRules,
   };
 }

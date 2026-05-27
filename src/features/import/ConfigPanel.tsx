@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { COMMON_ACCOUNT_OPTIONS } from "./config";
-import type { AppConfig, CategoryRule, NormalizedTransaction, SourcePlatform } from "./types";
+import type { AppConfig, CategoryRule, ExcludeRule, NormalizedTransaction, SourcePlatform } from "./types";
 import styles from "./import-workbench.module.css";
 
 /**
@@ -116,6 +116,43 @@ export function ConfigPanel({
 
   function removeRule(id: string) {
     onChange({ ...config, categoryRules: config.categoryRules.filter((rule) => rule.id !== id) });
+  }
+
+  function addExcludeRule() {
+    onChange({
+      ...config,
+      excludeRules: [
+        ...config.excludeRules,
+        {
+          id: crypto.randomUUID(),
+          source: "all",
+          keyword: "",
+          startTime: "",
+          endTime: "",
+        },
+      ],
+    });
+  }
+
+  function updateExcludeRule(id: string, patch: Partial<ExcludeRule>) {
+    onChange({
+      ...config,
+      excludeRules: config.excludeRules.map((rule) => (rule.id === id ? { ...rule, ...patch } : rule)),
+    });
+  }
+
+  function moveExcludeRule(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= config.excludeRules.length) {
+      return;
+    }
+    const rules = [...config.excludeRules];
+    [rules[index], rules[target]] = [rules[target], rules[index]];
+    onChange({ ...config, excludeRules: rules });
+  }
+
+  function removeExcludeRule(id: string) {
+    onChange({ ...config, excludeRules: config.excludeRules.filter((rule) => rule.id !== id) });
   }
 
   return (
@@ -253,6 +290,47 @@ export function ConfigPanel({
           )}
         </div>
       </div>
+
+      <div className={styles.configBlock}>
+        <div className={styles.blockTitle}>
+          <h3>排除规则</h3>
+          <button className={styles.textButton} type="button" onClick={addExcludeRule}>+ 新规则</button>
+        </div>
+        <p className={styles.helper}>匹配到这些关键字的交易将自动排除，不出现在预览中。支持来源和时间段筛选。</p>
+        <div className={styles.ruleList}>
+          {config.excludeRules.map((rule, index) => (
+            <div className={styles.ruleCard} key={rule.id}>
+              <div className={styles.ruleControls}>
+                <span className={styles.ruleIndex}>{String(index + 1).padStart(2, "0")}</span>
+                <button type="button" onClick={() => moveExcludeRule(index, -1)} disabled={index === 0}>↑</button>
+                <button type="button" onClick={() => moveExcludeRule(index, 1)} disabled={index === config.excludeRules.length - 1}>↓</button>
+                <button type="button" onClick={() => removeExcludeRule(rule.id)}>删除</button>
+              </div>
+              <div className={styles.ruleGrid}>
+                <select
+                  value={rule.source}
+                  onChange={(event) => updateExcludeRule(rule.id, { source: event.target.value as ExcludeRule["source"] })}
+                >
+                  <option value="all">全部来源</option>
+                  <option value="alipay">支付宝</option>
+                  <option value="wechat">微信</option>
+                </select>
+                <input
+                  value={rule.keyword}
+                  onChange={(event) => updateExcludeRule(rule.id, { keyword: event.target.value })}
+                  placeholder="商户/商品关键词"
+                />
+                <input type="time" value={rule.startTime} onChange={(event) => updateExcludeRule(rule.id, { startTime: event.target.value })} />
+                <input type="time" value={rule.endTime} onChange={(event) => updateExcludeRule(rule.id, { endTime: event.target.value })} />
+              </div>
+            </div>
+          ))}
+          {config.excludeRules.length === 0 && (
+            <p className={styles.emptyHint}>尚未添加排除规则，所有交易将正常参与分类。</p>
+          )}
+        </div>
+      </div>
+
       <datalist id="account-options">
         {accountOptions.map((account) => <option key={account} value={account} />)}
       </datalist>

@@ -1,11 +1,11 @@
 import type {
   AppConfig,
-  CategoryRule,
   NormalizedTransaction,
   PreviewRow,
   QianjiTemplateRow,
   RowIssue,
   RowOverride,
+  SourcePlatform,
   TemplateType,
 } from "./types";
 
@@ -56,7 +56,10 @@ function isTimeInRange(time: string, startTime: string, endTime: string): boolea
   return time >= startTime || time <= endTime;
 }
 
-function matchesRule(transaction: NormalizedTransaction, rule: CategoryRule): boolean {
+function matchesRule(
+  transaction: NormalizedTransaction,
+  rule: { source: SourcePlatform | "all"; keyword: string; startTime: string; endTime: string },
+): boolean {
   if (rule.source !== "all" && rule.source !== transaction.source) {
     return false;
   }
@@ -192,12 +195,16 @@ export function buildPreviewRows(
   overrides: Record<string, RowOverride> = {},
   dateFilter?: { from?: string; to?: string },
 ): PreviewRow[] {
-  const filtered = transactions.filter((t) => {
+  const dateFiltered = transactions.filter((t) => {
     const date = t.occurredAt.slice(0, 10);
     if (dateFilter?.from && date < dateFilter.from) return false;
     if (dateFilter?.to && date > dateFilter.to) return false;
     return true;
   });
+
+  const filtered = config.excludeRules.length > 0
+    ? dateFiltered.filter((t) => !config.excludeRules.some((rule) => matchesRule(t, rule)))
+    : dateFiltered;
 
   const specialIssues = collectSpecialIssues(transactions);
 

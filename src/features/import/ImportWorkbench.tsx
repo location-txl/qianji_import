@@ -335,6 +335,7 @@ export function ImportWorkbench() {
             <button type="button" className={styles.secondaryButton} disabled={!selectedIds.size} onClick={applyBatch}>应用字段</button>
             <button type="button" className={styles.secondaryButton} disabled={!selectedIds.size} onClick={() => setSelectedInclude(true)}>纳入导出</button>
             <button type="button" className={styles.textButton} disabled={!selectedIds.size} onClick={() => setSelectedInclude(false)}>排除</button>
+            <button type="button" className={styles.textButton} disabled={!selectedIds.size} onClick={() => setSelectedIds(new Set())}>清除选中</button>
           </div>
 
           {pendingRows.length > 0 && (

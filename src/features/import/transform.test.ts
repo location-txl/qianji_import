@@ -196,3 +196,89 @@ describe("日期范围过滤", () => {
     expect(rows).toHaveLength(0);
   });
 });
+
+describe("关键字排除规则", () => {
+  it("匹配关键字的交易不出现在预览中", () => {
+    const excludedCfg: AppConfig = {
+      ...structuredClone(DEFAULT_CONFIG),
+      sourceCategoryMappings: { "alipay:餐饮美食": "日常餐饮" },
+      categoryRules: [],
+      excludeRules: [
+        { id: "ex1", source: "all", keyword: "京东便利店", startTime: "", endTime: "" },
+      ],
+    };
+    const toExclude = transaction({ counterparty: "京东便利店", item: "早餐" });
+    const toKeep = transaction({ id: "alipay-2", counterparty: "星巴克", item: "咖啡" });
+    const rows = buildPreviewRows([toExclude, toKeep], excludedCfg);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe("alipay-2");
+  });
+
+  it("来源筛选生效", () => {
+    const cfg: AppConfig = {
+      ...structuredClone(DEFAULT_CONFIG),
+      sourceCategoryMappings: {},
+      categoryRules: [],
+      excludeRules: [
+        { id: "ex1", source: "wechat", keyword: "京东", startTime: "", endTime: "" },
+      ],
+    };
+    const alipay = transaction({ counterparty: "京东便利店", item: "" });
+    const wechat = transaction({
+      id: "wechat-1",
+      source: "wechat",
+      counterparty: "京东商城",
+      item: "",
+      paymentMethod: "零钱",
+      basePaymentMethod: "零钱",
+    });
+    const rows = buildPreviewRows([alipay, wechat], cfg);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].source).toBe("alipay");
+  });
+
+  it("时间段筛选生效", () => {
+    const cfg: AppConfig = {
+      ...structuredClone(DEFAULT_CONFIG),
+      sourceCategoryMappings: {},
+      categoryRules: [],
+      excludeRules: [
+        { id: "ex1", source: "all", keyword: "便利店", startTime: "06:00", endTime: "10:00" },
+      ],
+    };
+    const morning = transaction({ occurredAt: "2026-05-01 08:00", counterparty: "京东便利店", item: "" });
+    const evening = transaction({ id: "alipay-2", occurredAt: "2026-05-01 20:00", counterparty: "京东便利店", item: "" });
+    const rows = buildPreviewRows([morning, evening], cfg);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe("alipay-2");
+  });
+
+  it("无排除规则时全部保留", () => {
+    const cfg: AppConfig = {
+      ...structuredClone(DEFAULT_CONFIG),
+      sourceCategoryMappings: {},
+      categoryRules: [],
+      excludeRules: [],
+    };
+    const rows = buildPreviewRows([transaction()], cfg);
+    expect(rows).toHaveLength(1);
+  });
+
+  it("多条排除规则取并集", () => {
+    const cfg: AppConfig = {
+      ...structuredClone(DEFAULT_CONFIG),
+      sourceCategoryMappings: {},
+      categoryRules: [],
+      excludeRules: [
+        { id: "ex1", source: "all", keyword: "京东", startTime: "", endTime: "" },
+        { id: "ex2", source: "all", keyword: "淘宝", startTime: "", endTime: "" },
+      ],
+    };
+    const jd = transaction({ counterparty: "京东商城", item: "" });
+    const taobao = transaction({ id: "alipay-2", counterparty: "淘宝网", item: "" });
+    const keep = transaction({ id: "alipay-3", counterparty: "星巴克", item: "" });
+    const rows = buildPreviewRows([jd, taobao, keep], cfg);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe("alipay-3");
+  });
+});

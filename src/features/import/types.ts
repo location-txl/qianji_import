@@ -35,6 +35,17 @@ export interface CategoryRule {
 }
 
 /**
+ * 关键字排除规则，匹配的交易不出现在预览中。
+ */
+export interface ExcludeRule {
+  id: string;
+  source: SourcePlatform | "all";
+  keyword: string;
+  startTime: string;
+  endTime: string;
+}
+
+/**
  * 本机持久化配置；账单明细和编辑草稿不会写入该结构。
  */
 export interface AppConfig {
@@ -42,6 +53,7 @@ export interface AppConfig {
   paymentMethodMappings: Record<string, string>;
   sourceCategoryMappings: Record<string, string>;
   categoryRules: CategoryRule[];
+  excludeRules: ExcludeRule[];
 }
 
 /**
