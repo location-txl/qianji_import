@@ -15,7 +15,14 @@ import type {
   RowOverride,
   SourcePlatform,
 } from "./types";
-import styles from "./import-workbench.module.css";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { InputGroup, InputGroupInput, InputGroupAddon } from "@/components/ui/input-group";
+import { Search, Download } from "lucide-react";
 
 type ViewFilter = "all" | "ready" | "pending";
 
@@ -33,9 +40,6 @@ interface BatchEdit {
 
 const EMPTY_BATCH: BatchEdit = { 分类: "", 类型: "", 账户1: "", 备注: "" };
 
-/**
- * 钱迹账单转换主工作台：账单始终留在页面内存，只有映射配置通过接口落盘。
- */
 export function ImportWorkbench() {
   const [config, setConfig] = useState<AppConfig>(structuredClone(DEFAULT_CONFIG));
   const [transactions, setTransactions] = useState<NormalizedTransaction[]>([]);
@@ -220,51 +224,65 @@ export function ImportWorkbench() {
   }
 
   return (
-    <main className={styles.workbench}>
-      <header className={styles.hero}>
+    <main
+      className="min-h-screen px-[clamp(18px,3.5vw,56px)] pb-12 pt-11 text-foreground"
+      style={{
+        background:
+          "radial-gradient(circle at 96% 4%, rgba(182, 91, 50, 0.13), transparent 26rem), repeating-linear-gradient(90deg, transparent, transparent 47px, rgba(22, 63, 59, 0.022) 48px), var(--background)",
+      }}
+    >
+      <header className="mx-auto mb-8 flex max-w-[1560px] justify-between gap-8 border-b border-border pb-7">
         <div>
-          <p className={styles.eyebrow}>LOCAL LEDGER CONVERTER</p>
-          <h1>钱迹账簿整理台</h1>
-          <p className={styles.lead}>把支付宝与微信账单对齐到钱迹模板。账单留在当前页面，规则仅保存在你的电脑。</p>
+          <p className="mb-2.5 font-mono text-[11px] font-bold tracking-[0.18em] text-accent">LOCAL LEDGER CONVERTER</p>
+          <h1 className="mb-3 font-title text-[clamp(38px,4vw,56px)] font-bold tracking-[0.08em]">钱迹账簿整理台</h1>
+          <p className="max-w-[620px] text-base text-muted-foreground leading-[1.75]">
+            把支付宝与微信账单对齐到钱迹模板。账单留在当前页面，规则仅保存在你的电脑。
+          </p>
         </div>
-        <div className={styles.heroNote}>
-          <span>模板边界</span>
-          <strong>退款、转账、红包</strong>
-          <small>默认暂停导出，等待人工确认</small>
+        <div className="self-end min-w-[244px] rounded-sm bg-primary p-[18px_22px] text-primary-foreground">
+          <span className="mb-2 block font-mono text-[11px] tracking-[0.16em] text-[#b6d1c8]">模板边界</span>
+          <strong className="block font-title text-xl tracking-[0.08em]">退款、转账、红包</strong>
+          <small className="mt-1.5 block text-[#d9ded8]">默认暂停导出，等待人工确认</small>
         </div>
       </header>
 
-      <div className={styles.workspace}>
-        <aside className={styles.sidebar}>
-          <section className={styles.panel}>
-            <div className={styles.sectionHeading}>
-              <div>
-                <p className={styles.eyebrow}>01 / 导入文件</p>
-                <h2>来源账单</h2>
-              </div>
-            </div>
-            <label className={styles.uploadCard}>
-              <span>支付宝 CSV</span>
-              <strong>{loadedFiles.alipay?.name ?? "选择交易明细"}</strong>
-              <small>{loadedFiles.alipay ? `${loadedFiles.alipay.count} 条已载入` : "支持含说明行的官方导出文件"}</small>
-              <input type="file" accept=".csv,text/csv" onChange={(event) => loadFile("alipay", event)} />
-            </label>
-            <label className={styles.uploadCard}>
-              <span>微信 XLSX</span>
-              <strong>{loadedFiles.wechat?.name ?? "选择支付账单"}</strong>
-              <small>{loadedFiles.wechat ? `${loadedFiles.wechat.count} 条已载入` : "支持官方 Excel 流水文件"}</small>
-              <input type="file" accept=".xlsx" onChange={(event) => loadFile("wechat", event)} />
-            </label>
-            {transactions.length > 0 && (
-              <div className={styles.dateFilter}>
-                <label>日期范围</label>
-                <input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setSelectedIds(new Set()); }} title="起始日期" />
-                <span>—</span>
-                <input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setSelectedIds(new Set()); }} title="截止日期" />
-              </div>
-            )}
-            {importMessage && <p className={styles.message}>{importMessage}</p>}
-          </section>
+      <div className="mx-auto grid max-w-[1560px] grid-cols-[minmax(320px,400px)_minmax(0,1fr)] items-start gap-5">
+        <aside className="flex flex-col gap-4">
+          <Card>
+            <CardHeader>
+              <p className="font-mono text-[11px] font-bold tracking-[0.18em] text-accent">01 / 导入文件</p>
+              <CardTitle>来源账单</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <label className="block cursor-pointer rounded-sm border border-dashed border-[#c5b9a7] bg-[#fcf8f0] p-4 transition-colors hover:border-accent hover:bg-[#fff8ee]">
+                <span className="block text-xs font-bold text-accent">支付宝 CSV</span>
+                <strong className="my-1.5 block truncate">{loadedFiles.alipay?.name ?? "选择交易明细"}</strong>
+                <small className="block text-muted-foreground leading-relaxed">
+                  {loadedFiles.alipay ? `${loadedFiles.alipay.count} 条已载入` : "支持含说明行的官方导出文件"}
+                </small>
+                <input type="file" accept=".csv,text/csv" onChange={(event) => loadFile("alipay", event)} className="mt-3 block max-w-full text-xs text-muted-foreground" />
+              </label>
+              <label className="block cursor-pointer rounded-sm border border-dashed border-[#c5b9a7] bg-[#fcf8f0] p-4 transition-colors hover:border-accent hover:bg-[#fff8ee]">
+                <span className="block text-xs font-bold text-accent">微信 XLSX</span>
+                <strong className="my-1.5 block truncate">{loadedFiles.wechat?.name ?? "选择支付账单"}</strong>
+                <small className="block text-muted-foreground leading-relaxed">
+                  {loadedFiles.wechat ? `${loadedFiles.wechat.count} 条已载入` : "支持官方 Excel 流水文件"}
+                </small>
+                <input type="file" accept=".xlsx" onChange={(event) => loadFile("wechat", event)} className="mt-3 block max-w-full text-xs text-muted-foreground" />
+              </label>
+              {transactions.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <label className="text-sm">日期范围</label>
+                  <Input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setSelectedIds(new Set()); }} title="起始日期" className="w-[140px]" />
+                  <span>—</span>
+                  <Input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setSelectedIds(new Set()); }} title="截止日期" className="w-[140px]" />
+                </div>
+              )}
+              {importMessage && (
+                <div className="rounded-sm bg-primary/5 p-2.5 text-sm text-primary">{importMessage}</div>
+              )}
+            </CardContent>
+          </Card>
           <ConfigPanel
             config={config}
             transactions={transactions}
@@ -276,82 +294,108 @@ export function ImportWorkbench() {
           />
         </aside>
 
-        <section className={`${styles.panel} ${styles.results}`}>
-          <div className={styles.resultsHead}>
-            <div>
-              <p className={styles.eyebrow}>03 / 校对并导出</p>
-              <h2>钱迹模板预览</h2>
+        <Card className="min-h-[720px]">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-mono text-[11px] font-bold tracking-[0.18em] text-accent">03 / 校对并导出</p>
+                <CardTitle className="text-2xl">钱迹模板预览</CardTitle>
+              </div>
+              <Button size="lg" type="button" onClick={downloadCsv} disabled={readyRows.length === 0} className="h-[43px] px-6 font-bold">
+                <Download data-icon="inline-start" />
+                导出 CSV
+              </Button>
             </div>
-            <button className={styles.exportButton} type="button" onClick={downloadCsv} disabled={readyRows.length === 0}>
-              导出 CSV
-            </button>
-          </div>
-
-          <div className={styles.metrics}>
-            <article><span>载入记录</span><strong>{rows.length}</strong></article>
-            <article><span>可导出</span><strong>{readyRows.length}</strong></article>
-            <article className={pendingRows.length ? styles.warningMetric : undefined}><span>待处理</span><strong>{pendingRows.length}</strong></article>
-            <article><span>导出金额合计</span><strong>¥ {totalAmount.toFixed(2)}</strong></article>
-          </div>
-
-          <div className={styles.toolbar}>
-            <div className={styles.filterTabs}>
-              {([
-                ["all", `全部 ${rows.length}`],
-                ["ready", `可导出 ${readyRows.length}`],
-                ["pending", `待处理 ${pendingRows.length}`],
-              ] as [ViewFilter, string][]).map(([value, label]) => (
-                <button
-                  className={filter === value ? styles.activeTab : undefined}
-                  key={value}
-                  type="button"
-                  onClick={() => setFilter(value)}
+          </CardHeader>
+          <CardContent className="flex flex-col gap-0">
+            <div className="mb-5 grid grid-cols-4 gap-2.5">
+              {[
+                { label: "载入记录", value: rows.length },
+                { label: "可导出", value: readyRows.length },
+                { label: "待处理", value: pendingRows.length, warn: pendingRows.length > 0 },
+                { label: "导出金额合计", value: `¥ ${totalAmount.toFixed(2)}` },
+              ].map(({ label, value, warn }) => (
+                <div
+                  key={label}
+                  className={cn(
+                    "border-l-3 border-primary bg-[#faf6ee] p-[15px_17px]",
+                    warn && "border-accent bg-warning",
+                  )}
                 >
-                  {label}
-                </button>
+                  <span className="block text-xs text-muted-foreground">{label}</span>
+                  <strong className="mt-1.5 block font-mono text-2xl font-semibold">{value}</strong>
+                </div>
               ))}
             </div>
-            <input
-              className={styles.search}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="搜索商户、商品或账户"
-            />
-          </div>
 
-          <div className={styles.batchBar}>
-            <strong>批量处理 {selectedIds.size ? `(${selectedIds.size})` : ""}</strong>
-            <input value={batch.分类} onChange={(event) => setBatch({ ...batch, 分类: event.target.value })} placeholder="分类" />
-            <select value={batch.类型} onChange={(event) => setBatch({ ...batch, 类型: event.target.value })}>
-              <option value="">类型不改</option>
-              <option value="收入">收入</option>
-              <option value="支出">支出</option>
-              <option value="报销">报销</option>
-              <option value="转账">转账</option>
-              <option value="还款">还款</option>
-            </select>
-            <input list="account-options" value={batch.账户1} onChange={(event) => setBatch({ ...batch, 账户1: event.target.value })} placeholder="账户1" />
-            <input value={batch.备注} onChange={(event) => setBatch({ ...batch, 备注: event.target.value })} placeholder="备注" />
-            <button type="button" className={styles.secondaryButton} disabled={!selectedIds.size} onClick={applyBatch}>应用字段</button>
-            <button type="button" className={styles.secondaryButton} disabled={!selectedIds.size} onClick={() => setSelectedInclude(true)}>纳入导出</button>
-            <button type="button" className={styles.textButton} disabled={!selectedIds.size} onClick={() => setSelectedInclude(false)}>排除</button>
-            <button type="button" className={styles.textButton} disabled={!selectedIds.size} onClick={() => setSelectedIds(new Set())}>清除选中</button>
-          </div>
-
-          {pendingRows.length > 0 && (
-            <div className={styles.notice}>
-              <strong>{pendingRows.length} 条记录未进入默认导出。</strong>
-              <span>在“待处理”中核对问题；确定合法类型与账户后，选中并点击“纳入导出”。</span>
+            <div className="mb-3 flex justify-between gap-4">
+              <ToggleGroup
+                value={[filter]}
+                onValueChange={(value) => { if (value.length > 0) setFilter(value[0] as ViewFilter); }}
+                variant="default"
+                spacing={0}
+                className="rounded-sm bg-[#f3ede3] p-[3px]"
+              >
+                <ToggleGroupItem value="all" className="h-[34px] rounded-sm px-4 data-pressed:bg-primary data-pressed:text-primary-foreground">
+                  全部 {rows.length}
+                </ToggleGroupItem>
+                <ToggleGroupItem value="ready" className="h-[34px] rounded-sm px-4 data-pressed:bg-primary data-pressed:text-primary-foreground">
+                  可导出 {readyRows.length}
+                </ToggleGroupItem>
+                <ToggleGroupItem value="pending" className="h-[34px] rounded-sm px-4 data-pressed:bg-primary data-pressed:text-primary-foreground">
+                  待处理 {pendingRows.length}
+                </ToggleGroupItem>
+              </ToggleGroup>
+              <InputGroup className="max-w-[270px]">
+                <InputGroupInput
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="搜索商户、商品或账户"
+                />
+                <InputGroupAddon align="inline-end">
+                  <Search data-icon="inline-start" />
+                </InputGroupAddon>
+              </InputGroup>
             </div>
-          )}
-          <PreviewTable
-            rows={visibleRows}
-            selectedIds={selectedIds}
-            onSelect={selectRow}
-            onSelectAll={selectAll}
-            onFieldChange={setRowField}
-          />
-        </section>
+
+            <div className="mb-3 grid grid-cols-[auto_repeat(4,minmax(105px,1fr))_auto_auto_auto_auto] items-center gap-[7px] rounded-sm border border-[#e7dece] bg-[#f8f3eb] p-[11px_12px]">
+              <strong className="mr-1.5 whitespace-nowrap text-[13px]">
+                批量处理 {selectedIds.size ? `(${selectedIds.size})` : ""}
+              </strong>
+              <Input value={batch.分类} onChange={(event) => setBatch({ ...batch, 分类: event.target.value })} placeholder="分类" />
+              <select value={batch.类型} onChange={(event) => setBatch({ ...batch, 类型: event.target.value })} className="h-[34px] rounded-sm border border-input bg-white px-2 text-sm">
+                <option value="">类型不改</option>
+                <option value="收入">收入</option>
+                <option value="支出">支出</option>
+                <option value="报销">报销</option>
+                <option value="转账">转账</option>
+                <option value="还款">还款</option>
+              </select>
+              <Input list="account-options" value={batch.账户1} onChange={(event) => setBatch({ ...batch, 账户1: event.target.value })} placeholder="账户1" />
+              <Input value={batch.备注} onChange={(event) => setBatch({ ...batch, 备注: event.target.value })} placeholder="备注" />
+              <Button variant="outline" type="button" disabled={!selectedIds.size} onClick={applyBatch}>应用字段</Button>
+              <Button variant="outline" type="button" disabled={!selectedIds.size} onClick={() => setSelectedInclude(true)}>纳入导出</Button>
+              <Button variant="ghost" size="sm" type="button" disabled={!selectedIds.size} onClick={() => setSelectedInclude(false)} className="text-accent">排除</Button>
+              <Button variant="ghost" size="sm" type="button" disabled={!selectedIds.size} onClick={() => setSelectedIds(new Set())} className="text-accent">清除选中</Button>
+            </div>
+
+            {pendingRows.length > 0 && (
+              <Alert className="mb-3 border-warning bg-warning text-warning-foreground">
+                <AlertTitle>{pendingRows.length} 条记录未进入默认导出。</AlertTitle>
+                <AlertDescription>
+                  在“待处理”中核对问题；确定合法类型与账户后，选中并点击“纳入导出”。
+                </AlertDescription>
+              </Alert>
+            )}
+            <PreviewTable
+              rows={visibleRows}
+              selectedIds={selectedIds}
+              onSelect={selectRow}
+              onSelectAll={selectAll}
+              onFieldChange={setRowField}
+            />
+          </CardContent>
+        </Card>
       </div>
     </main>
   );

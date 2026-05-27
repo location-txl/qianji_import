@@ -1,11 +1,10 @@
 "use client";
 
 import { QIANJI_HEADERS, type PreviewRow, type QianjiHeader } from "./types";
-import styles from "./import-workbench.module.css";
+import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 
-/**
- * 最终模板预览表属性，所有编辑动作交由工作台维护覆盖状态。
- */
 interface PreviewTableProps {
   rows: PreviewRow[];
   selectedIds: Set<string>;
@@ -31,25 +30,30 @@ function TemplateInput({
 }) {
   if (header === "类型") {
     return (
-      <select value={row.template[header]} onChange={(event) => onChange(row.id, header, event.target.value)}>
+      <select
+        value={row.template[header]}
+        onChange={(event) => onChange(row.id, header, event.target.value)}
+        className="h-8 min-w-[105px] rounded-sm border border-input bg-white/75 px-2 text-xs"
+      >
         {TYPES.map((type) => <option key={type || "empty"} value={type}>{type || "待定"}</option>)}
       </select>
     );
   }
 
   return (
-    <input
+    <Input
       list={header === "账户1" || header === "账户2" ? "account-options" : undefined}
       value={row.template[header]}
       onChange={(event) => onChange(row.id, header, event.target.value)}
       aria-label={`${sourceName(row)} ${header}`}
+      className={cn(
+        "h-8 min-w-[105px] bg-white/75 text-xs",
+        header === "备注" && "min-w-[270px]",
+      )}
     />
   );
 }
 
-/**
- * 展示钱迹全字段表格并支持逐行修改，不隐藏任何会进入 CSV 的列。
- */
 export function PreviewTable({
   rows,
   selectedIds,
@@ -60,40 +64,54 @@ export function PreviewTable({
   const allSelected = rows.length > 0 && rows.every((row) => selectedIds.has(row.id));
 
   return (
-    <div className={styles.tableFrame}>
-      <table className={styles.previewTable}>
+    <div className="overflow-auto max-h-[calc(100vh-360px)] min-h-[330px] rounded-sm border border-border">
+      <table className="w-full min-w-[2180px] border-separate border-spacing-0 text-xs">
         <thead>
           <tr>
-            <th className={styles.selectCell}>
-              <input
-                type="checkbox"
+            <th className="sticky top-0 left-0 z-[4] w-[42px] min-w-[42px] bg-primary p-[11px_8px] text-center text-primary-foreground">
+              <Checkbox
                 checked={allSelected}
-                onChange={(event) => onSelectAll(event.target.checked)}
+                onCheckedChange={(checked) => onSelectAll(checked === true)}
                 aria-label="选中当前列表全部记录"
               />
             </th>
-            <th>来源 / 状态</th>
-            {QIANJI_HEADERS.map((header) => <th key={header}>{header}</th>)}
+            <th className="sticky top-0 left-[42px] z-[3] bg-primary p-[11px_8px] text-left font-semibold text-primary-foreground whitespace-nowrap">
+              来源 / 状态
+            </th>
+            {QIANJI_HEADERS.map((header) => (
+              <th key={header} className="sticky top-0 z-[2] bg-primary p-[11px_8px] text-left font-semibold text-primary-foreground whitespace-nowrap">
+                {header}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr className={row.canExport ? styles.readyRow : styles.pendingRow} key={row.id}>
-              <td className={styles.selectCell}>
-                <input
-                  type="checkbox"
+            <tr
+              key={row.id}
+              className={cn(
+                row.canExport ? "[&_td]:bg-card" : "[&_td]:bg-[#fff9f0]",
+              )}
+            >
+              <td className="sticky left-0 z-[1] w-[42px] min-w-[42px] border-b border-[#ede6db] p-1.5 text-center">
+                <Checkbox
                   checked={selectedIds.has(row.id)}
-                  onChange={(event) => onSelect(row.id, event.target.checked)}
+                  onCheckedChange={(checked) => onSelect(row.id, checked === true)}
                   aria-label={`选中 ${sourceName(row)} 第 ${row.transaction.sourceRow} 行`}
                 />
               </td>
-              <td className={styles.sourceCell}>
-                <strong>{sourceName(row)}</strong>
-                <span>{row.transaction.transactionKind}</span>
-                <small>{row.canExport ? "可导出" : row.issues[0]?.message ?? "待处理"}</small>
+              <td className="sticky left-[42px] z-[1] min-w-[205px] border-b border-[#ede6db] p-1.5 align-top">
+                <strong className="block text-primary">{sourceName(row)}</strong>
+                <span className="mb-1 block">{row.transaction.transactionKind}</span>
+                <small className={cn(
+                  "block max-w-[188px] leading-[1.42]",
+                  row.canExport ? "text-[#44816f]" : "text-warning-foreground",
+                )}>
+                  {row.canExport ? "可导出" : row.issues[0]?.message ?? "待处理"}
+                </small>
               </td>
               {QIANJI_HEADERS.map((header) => (
-                <td key={header} className={header === "备注" ? styles.noteCell : undefined}>
+                <td key={header} className="border-b border-[#ede6db] p-1.5 align-top">
                   <TemplateInput row={row} header={header} onChange={onFieldChange} />
                 </td>
               ))}
@@ -101,7 +119,7 @@ export function PreviewTable({
           ))}
           {rows.length === 0 && (
             <tr>
-              <td className={styles.noRows} colSpan={QIANJI_HEADERS.length + 2}>
+              <td className="p-11 text-center text-muted-foreground" colSpan={QIANJI_HEADERS.length + 2}>
                 当前筛选条件下没有账单记录。
               </td>
             </tr>

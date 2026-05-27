@@ -3,11 +3,13 @@
 import { useMemo, useState } from "react";
 import { COMMON_ACCOUNT_OPTIONS } from "./config";
 import type { AppConfig, CategoryRule, ExcludeRule, NormalizedTransaction, SourcePlatform } from "./types";
-import styles from "./import-workbench.module.css";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Card, CardContent, CardHeader, CardTitle, CardAction, CardDescription } from "@/components/ui/card";
+import { ChevronUp, ChevronDown, Trash2, X } from "lucide-react";
 
-/**
- * 配置区属性，父组件负责持久化和触发重新转换。
- */
 interface ConfigPanelProps {
   config: AppConfig;
   transactions: NormalizedTransaction[];
@@ -26,9 +28,6 @@ function unique(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-CN"));
 }
 
-/**
- * 编辑仅落盘为配置 JSON 的账户映射和分类规则，不接触原始账单文件。
- */
 export function ConfigPanel({
   config,
   transactions,
@@ -156,184 +155,276 @@ export function ConfigPanel({
   }
 
   return (
-    <section className={`${styles.panel} ${styles.configPanel}`}>
-      <div className={styles.sectionHeading}>
-        <div>
-          <p className={styles.eyebrow}>02 / 映射规则</p>
-          <h2>账户与分类</h2>
-        </div>
-        <button className={styles.primaryButton} type="button" disabled={!dirty || saving} onClick={onSave}>
-          {saving ? "保存中" : dirty ? "保存配置" : "已保存"}
-        </button>
-      </div>
-      <p className={styles.helper}>配置仅写入本机 <code>data/config.json</code>，不会保存上传账单或预览明细。</p>
-      {message && <p className={styles.message}>{message}</p>}
+    <Card>
+      <CardHeader>
+        <p className="text-accent font-mono text-[11px] font-bold tracking-[0.18em]">02 / 映射规则</p>
+        <CardTitle>账户与分类</CardTitle>
+        <CardDescription className="font-mono text-xs">
+          配置仅写入本机 <code>data/config.json</code>，不会保存上传账单或预览明细。
+        </CardDescription>
+        <CardAction>
+          <Button disabled={!dirty || saving} onClick={onSave}>
+            {saving ? "保存中" : dirty ? "保存配置" : "已保存"}
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-0">
+        {message && (
+          <div className="mb-4 rounded-sm bg-primary/5 p-2.5 text-sm text-primary">{message}</div>
+        )}
 
-      <div className={styles.configBlock}>
-        <h3>钱迹账户</h3>
-        <div className={styles.tagRow}>
-          {config.accounts.map((account) => (
-            <span className={styles.tag} key={account}>
-              {account}
-              {!COMMON_ACCOUNT_OPTIONS.includes(account) && (
-                <button type="button" onClick={() => removeAccount(account)} aria-label={`移除账户 ${account}`}>
-                  ×
-                </button>
-              )}
-            </span>
-          ))}
-        </div>
-        <div className={styles.inlineEntry}>
-          <input
-            value={accountDraft}
-            onChange={(event) => setAccountDraft(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && addAccount()}
-            placeholder="新增账户，如 招商信用卡"
-          />
-          <button className={styles.secondaryButton} type="button" onClick={addAccount}>
-            添加
-          </button>
-        </div>
-      </div>
-
-      <div className={styles.configBlock}>
-        <h3>付款方式 → 账户</h3>
-        {paymentMethods.length === 0 ? (
-          <p className={styles.emptyHint}>上传账单后，将在这里列出实际资金来源。</p>
-        ) : (
-          <div className={styles.mappingList}>
-            {paymentMethods.map((method) => (
-              <label className={styles.mappingRow} key={method}>
-                <span title={method}>{method || "未提供"}</span>
-                <input
-                  list="account-options"
-                  value={config.paymentMethodMappings[method] ?? ""}
-                  onChange={(event) => changeMapping("paymentMethodMappings", method, event.target.value)}
-                  placeholder="选择或输入账户"
-                />
-              </label>
+        {/* 钱迹账户 */}
+        <div className="border-t border-border py-4">
+          <h3 className="mb-3 text-sm font-bold">钱迹账户</h3>
+          <div className="mb-3 flex flex-wrap gap-2">
+            {config.accounts.map((account) => (
+              <Badge variant="secondary" key={account} className="gap-1 rounded-full px-2.5 py-1 text-sm">
+                {account}
+                {!COMMON_ACCOUNT_OPTIONS.includes(account) && (
+                  <button
+                    type="button"
+                    onClick={() => removeAccount(account)}
+                    aria-label={`移除账户 ${account}`}
+                    className="ml-0.5 cursor-pointer text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-3" />
+                  </button>
+                )}
+              </Badge>
             ))}
           </div>
-        )}
-      </div>
-
-      <div className={styles.configBlock}>
-        <h3>来源分类 → 钱迹分类</h3>
-        <p className={styles.helper}>用 <code>/</code> 分隔一级和二级分类，如 <code>餐饮/早餐</code>。</p>
-        {categoryKeys.length === 0 ? (
-          <p className={styles.emptyHint}>支付宝分类会在上传后出现；微信可通过下方规则分类。</p>
-        ) : (
-          <div className={styles.mappingList}>
-            {categoryKeys.map((key) => {
-              const [source, category] = key.split(":");
-              return (
-                <label className={styles.mappingRow} key={key}>
-                  <span>{platformLabel(source as SourcePlatform)} / {category}</span>
-                  <input
-                    value={config.sourceCategoryMappings[key] ?? ""}
-                    onChange={(event) => changeMapping("sourceCategoryMappings", key, event.target.value)}
-                    placeholder="一级分类/二级分类"
-                  />
-                </label>
-              );
-            })}
+          <div className="flex gap-2">
+            <Input
+              value={accountDraft}
+              onChange={(event) => setAccountDraft(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && addAccount()}
+              placeholder="新增账户，如 招商信用卡"
+              className="min-w-0 flex-1"
+            />
+            <Button variant="outline" type="button" onClick={addAccount}>
+              添加
+            </Button>
           </div>
-        )}
-      </div>
-
-      <div className={styles.configBlock}>
-        <div className={styles.blockTitle}>
-          <h3>自动分类规则</h3>
-          <button className={styles.textButton} type="button" onClick={addRule}>+ 新规则</button>
         </div>
-        <p className={styles.helper}>按顺序首个匹配生效，例如商户包含”京东便利店”且时间在 06:00-10:00，一级分类”三餐”、二级分类”早餐”。</p>
-        <div className={styles.ruleList}>
-          {config.categoryRules.map((rule, index) => (
-            <div className={styles.ruleCard} key={rule.id}>
-              <div className={styles.ruleControls}>
-                <span className={styles.ruleIndex}>{String(index + 1).padStart(2, "0")}</span>
-                <button type="button" onClick={() => moveRule(index, -1)} disabled={index === 0}>↑</button>
-                <button type="button" onClick={() => moveRule(index, 1)} disabled={index === config.categoryRules.length - 1}>↓</button>
-                <button type="button" onClick={() => removeRule(rule.id)}>删除</button>
-              </div>
-              <div className={styles.ruleGrid}>
-                <select
-                  value={rule.source}
-                  onChange={(event) => updateRule(rule.id, { source: event.target.value as CategoryRule["source"] })}
-                >
-                  <option value="all">全部来源</option>
-                  <option value="alipay">支付宝</option>
-                  <option value="wechat">微信</option>
-                </select>
-                <input
-                  value={rule.keyword}
-                  onChange={(event) => updateRule(rule.id, { keyword: event.target.value })}
-                  placeholder="商户/商品关键词"
-                />
-                <input type="time" value={rule.startTime} onChange={(event) => updateRule(rule.id, { startTime: event.target.value })} />
-                <input type="time" value={rule.endTime} onChange={(event) => updateRule(rule.id, { endTime: event.target.value })} />
-                <input
-                  value={rule.category}
-                  onChange={(event) => updateRule(rule.id, { category: event.target.value })}
-                  placeholder="一级分类"
-                />
-                <input
-                  value={rule.subCategory}
-                  onChange={(event) => updateRule(rule.id, { subCategory: event.target.value })}
-                  placeholder="二级分类（可选）"
-                />
-              </div>
-            </div>
-          ))}
-          {config.categoryRules.length === 0 && (
-            <p className={styles.emptyHint}>尚未添加条件规则，来源分类映射仍会照常应用。</p>
+
+        {/* 付款方式 → 账户 */}
+        <div className="border-t border-border py-4">
+          <h3 className="mb-3 text-sm font-bold">付款方式 → 账户</h3>
+          {paymentMethods.length === 0 ? (
+            <p className="text-xs text-muted-foreground leading-relaxed">上传账单后，将在这里列出实际资金来源。</p>
+          ) : (
+            <FieldGroup className="gap-2">
+              {paymentMethods.map((method, index) => (
+                <Field key={method} orientation="horizontal" className="items-center gap-2">
+                  <FieldLabel
+                    htmlFor={`payment-method-mapping-${index}`}
+                    className="min-w-[112px] flex-1 truncate text-xs text-muted-foreground"
+                    title={method}
+                  >
+                    {method || "未提供"}
+                  </FieldLabel>
+                  <Input
+                    id={`payment-method-mapping-${index}`}
+                    list="account-options"
+                    value={config.paymentMethodMappings[method] ?? ""}
+                    onChange={(event) => changeMapping("paymentMethodMappings", method, event.target.value)}
+                    placeholder="选择或输入账户"
+                    className="min-w-[130px] flex-1"
+                  />
+                </Field>
+              ))}
+            </FieldGroup>
           )}
         </div>
-      </div>
 
-      <div className={styles.configBlock}>
-        <div className={styles.blockTitle}>
-          <h3>排除规则</h3>
-          <button className={styles.textButton} type="button" onClick={addExcludeRule}>+ 新规则</button>
-        </div>
-        <p className={styles.helper}>匹配到这些关键字的交易将自动排除，不出现在预览中。支持来源和时间段筛选。</p>
-        <div className={styles.ruleList}>
-          {config.excludeRules.map((rule, index) => (
-            <div className={styles.ruleCard} key={rule.id}>
-              <div className={styles.ruleControls}>
-                <span className={styles.ruleIndex}>{String(index + 1).padStart(2, "0")}</span>
-                <button type="button" onClick={() => moveExcludeRule(index, -1)} disabled={index === 0}>↑</button>
-                <button type="button" onClick={() => moveExcludeRule(index, 1)} disabled={index === config.excludeRules.length - 1}>↓</button>
-                <button type="button" onClick={() => removeExcludeRule(rule.id)}>删除</button>
-              </div>
-              <div className={styles.ruleGrid}>
-                <select
-                  value={rule.source}
-                  onChange={(event) => updateExcludeRule(rule.id, { source: event.target.value as ExcludeRule["source"] })}
-                >
-                  <option value="all">全部来源</option>
-                  <option value="alipay">支付宝</option>
-                  <option value="wechat">微信</option>
-                </select>
-                <input
-                  value={rule.keyword}
-                  onChange={(event) => updateExcludeRule(rule.id, { keyword: event.target.value })}
-                  placeholder="商户/商品关键词"
-                />
-                <input type="time" value={rule.startTime} onChange={(event) => updateExcludeRule(rule.id, { startTime: event.target.value })} />
-                <input type="time" value={rule.endTime} onChange={(event) => updateExcludeRule(rule.id, { endTime: event.target.value })} />
-              </div>
-            </div>
-          ))}
-          {config.excludeRules.length === 0 && (
-            <p className={styles.emptyHint}>尚未添加排除规则，所有交易将正常参与分类。</p>
+        {/* 来源分类 → 钱迹分类 */}
+        <div className="border-t border-border py-4">
+          <h3 className="mb-1 text-sm font-bold">来源分类 → 钱迹分类</h3>
+          <p className="mb-3 text-xs text-muted-foreground leading-relaxed">
+            用 <code className="font-mono">/</code> 分隔一级和二级分类，如 <code className="font-mono">餐饮/早餐</code>。
+          </p>
+          {categoryKeys.length === 0 ? (
+            <p className="text-xs text-muted-foreground leading-relaxed">支付宝分类会在上传后出现；微信可通过下方规则分类。</p>
+          ) : (
+            <FieldGroup className="gap-2">
+              {categoryKeys.map((key, index) => {
+                const [source, category] = key.split(":");
+                return (
+                  <Field key={key} orientation="horizontal" className="items-center gap-2">
+                    <FieldLabel
+                      htmlFor={`source-category-mapping-${index}`}
+                      className="min-w-[112px] flex-1 truncate text-xs text-muted-foreground"
+                    >
+                      {platformLabel(source as SourcePlatform)} / {category}
+                    </FieldLabel>
+                    <Input
+                      id={`source-category-mapping-${index}`}
+                      value={config.sourceCategoryMappings[key] ?? ""}
+                      onChange={(event) => changeMapping("sourceCategoryMappings", key, event.target.value)}
+                      placeholder="一级分类/二级分类"
+                      className="min-w-[130px] flex-1"
+                    />
+                  </Field>
+                );
+              })}
+            </FieldGroup>
           )}
         </div>
-      </div>
 
-      <datalist id="account-options">
-        {accountOptions.map((account) => <option key={account} value={account} />)}
-      </datalist>
-    </section>
+        {/* 自动分类规则 */}
+        <div className="border-t border-border py-4">
+          <div className="mb-1 flex items-start justify-between gap-3">
+            <h3 className="text-sm font-bold">自动分类规则</h3>
+            <Button variant="ghost" size="sm" type="button" onClick={addRule} className="text-accent">
+              + 新规则
+            </Button>
+          </div>
+          <p className="mb-3 text-xs text-muted-foreground leading-relaxed">
+            按顺序首个匹配生效，例如商户包含“京东便利店”且时间在 06:00-10:00，一级分类“三餐”、二级分类“早餐”。
+          </p>
+          <div className="flex flex-col gap-2.5">
+            {config.categoryRules.map((rule, index) => (
+              <div className="rounded-sm border border-border bg-[#fbf7ef] p-2.5" key={rule.id}>
+                <div className="mb-2 flex items-center gap-1">
+                  <span className="mr-auto font-mono text-xs text-accent">{String(index + 1).padStart(2, "0")}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    type="button"
+                    onClick={() => moveRule(index, -1)}
+                    disabled={index === 0}
+                  >
+                    <ChevronUp data-icon />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    type="button"
+                    onClick={() => moveRule(index, 1)}
+                    disabled={index === config.categoryRules.length - 1}
+                  >
+                    <ChevronDown data-icon />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    type="button"
+                    onClick={() => removeRule(rule.id)}
+                    className="text-destructive"
+                  >
+                    <Trash2 data-icon />
+                  </Button>
+                </div>
+                <div className="grid grid-cols-[1fr_1.45fr] gap-1.5 [&>input:last-child]:col-span-full">
+                  <select
+                    value={rule.source}
+                    onChange={(event) => updateRule(rule.id, { source: event.target.value as CategoryRule["source"] })}
+                    className="h-[34px] rounded-sm border border-input bg-white px-2 text-sm"
+                  >
+                    <option value="all">全部来源</option>
+                    <option value="alipay">支付宝</option>
+                    <option value="wechat">微信</option>
+                  </select>
+                  <Input
+                    value={rule.keyword}
+                    onChange={(event) => updateRule(rule.id, { keyword: event.target.value })}
+                    placeholder="商户/商品关键词"
+                  />
+                  <Input type="time" value={rule.startTime} onChange={(event) => updateRule(rule.id, { startTime: event.target.value })} />
+                  <Input type="time" value={rule.endTime} onChange={(event) => updateRule(rule.id, { endTime: event.target.value })} />
+                  <Input
+                    value={rule.category}
+                    onChange={(event) => updateRule(rule.id, { category: event.target.value })}
+                    placeholder="一级分类"
+                  />
+                  <Input
+                    value={rule.subCategory}
+                    onChange={(event) => updateRule(rule.id, { subCategory: event.target.value })}
+                    placeholder="二级分类（可选）"
+                  />
+                </div>
+              </div>
+            ))}
+            {config.categoryRules.length === 0 && (
+              <p className="text-xs text-muted-foreground leading-relaxed">尚未添加条件规则，来源分类映射仍会照常应用。</p>
+            )}
+          </div>
+        </div>
+
+        {/* 排除规则 */}
+        <div className="border-t border-border py-4">
+          <div className="mb-1 flex items-start justify-between gap-3">
+            <h3 className="text-sm font-bold">排除规则</h3>
+            <Button variant="ghost" size="sm" type="button" onClick={addExcludeRule} className="text-accent">
+              + 新规则
+            </Button>
+          </div>
+          <p className="mb-3 text-xs text-muted-foreground leading-relaxed">
+            匹配到这些关键字的交易将自动排除，不出现在预览中。支持来源和时间段筛选。
+          </p>
+          <div className="flex flex-col gap-2.5">
+            {config.excludeRules.map((rule, index) => (
+              <div className="rounded-sm border border-border bg-[#fbf7ef] p-2.5" key={rule.id}>
+                <div className="mb-2 flex items-center gap-1">
+                  <span className="mr-auto font-mono text-xs text-accent">{String(index + 1).padStart(2, "0")}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    type="button"
+                    onClick={() => moveExcludeRule(index, -1)}
+                    disabled={index === 0}
+                  >
+                    <ChevronUp data-icon />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    type="button"
+                    onClick={() => moveExcludeRule(index, 1)}
+                    disabled={index === config.excludeRules.length - 1}
+                  >
+                    <ChevronDown data-icon />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    type="button"
+                    onClick={() => removeExcludeRule(rule.id)}
+                    className="text-destructive"
+                  >
+                    <Trash2 data-icon />
+                  </Button>
+                </div>
+                <div className="grid grid-cols-[1fr_1.45fr] gap-1.5">
+                  <select
+                    value={rule.source}
+                    onChange={(event) => updateExcludeRule(rule.id, { source: event.target.value as ExcludeRule["source"] })}
+                    className="h-[34px] rounded-sm border border-input bg-white px-2 text-sm"
+                  >
+                    <option value="all">全部来源</option>
+                    <option value="alipay">支付宝</option>
+                    <option value="wechat">微信</option>
+                  </select>
+                  <Input
+                    value={rule.keyword}
+                    onChange={(event) => updateExcludeRule(rule.id, { keyword: event.target.value })}
+                    placeholder="商户/商品关键词"
+                  />
+                  <Input type="time" value={rule.startTime} onChange={(event) => updateExcludeRule(rule.id, { startTime: event.target.value })} />
+                  <Input type="time" value={rule.endTime} onChange={(event) => updateExcludeRule(rule.id, { endTime: event.target.value })} />
+                </div>
+              </div>
+            ))}
+            {config.excludeRules.length === 0 && (
+              <p className="text-xs text-muted-foreground leading-relaxed">尚未添加排除规则，所有交易将正常参与分类。</p>
+            )}
+          </div>
+        </div>
+
+        <datalist id="account-options">
+          {accountOptions.map((account) => <option key={account} value={account} />)}
+        </datalist>
+      </CardContent>
+    </Card>
   );
 }

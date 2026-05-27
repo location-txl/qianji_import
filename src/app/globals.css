@@ -1,9 +1,45 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
 :root {
   --font-body: "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif;
   --font-title: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
   --font-code: "SFMono-Regular", "Roboto Mono", monospace;
+  --background: #f6f1e8;
+  --foreground: #1d2927;
+  --card: #fffdf8;
+  --card-foreground: #1d2927;
+  --popover: #fffdf8;
+  --popover-foreground: #1d2927;
+  --primary: #163f3b;
+  --primary-foreground: #fffaf1;
+  --secondary: #f3ede3;
+  --secondary-foreground: #1d2927;
+  --muted: #f3ede3;
+  --muted-foreground: #68736d;
+  --accent: #b65b32;
+  --accent-foreground: #1d2927;
+  --destructive: #b65b32;
+  --border: #dcd3c5;
+  --input: #d9cebd;
+  --ring: #163f3b;
+  --radius: 3px;
+  --sidebar: #fffdf8;
+  --sidebar-foreground: #1d2927;
+  --sidebar-primary: #163f3b;
+  --sidebar-primary-foreground: #fffaf1;
+  --sidebar-accent: #f3ede3;
+  --sidebar-accent-foreground: #1d2927;
+  --sidebar-border: #dcd3c5;
+  --sidebar-ring: #163f3b;
+  --chart-1: #163f3b;
+  --chart-2: #b65b32;
+  --chart-3: #68736d;
+  --chart-4: #e5efeb;
+  --chart-5: #fff0dc;
+  --warning: #fff0dc;
+  --warning-foreground: #824323;
 }
 
 * {
@@ -32,4 +68,62 @@ button {
 
 button:disabled {
   cursor: not-allowed;
+}
+
+@theme inline {
+  --font-heading: var(--font-title);
+  --font-sans: var(--font-body);
+  --font-mono: "SFMono-Regular", "Roboto Mono", monospace;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }
