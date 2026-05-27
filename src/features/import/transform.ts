@@ -188,10 +188,18 @@ export function buildPreviewRows(
   transactions: NormalizedTransaction[],
   config: AppConfig,
   overrides: Record<string, RowOverride> = {},
+  dateFilter?: { from?: string; to?: string },
 ): PreviewRow[] {
+  const filtered = transactions.filter((t) => {
+    const date = t.occurredAt.slice(0, 10);
+    if (dateFilter?.from && date < dateFilter.from) return false;
+    if (dateFilter?.to && date > dateFilter.to) return false;
+    return true;
+  });
+
   const specialIssues = collectSpecialIssues(transactions);
 
-  return transactions.map((transaction) => {
+  return filtered.map((transaction) => {
     const template: QianjiTemplateRow = {
       ...emptyTemplateRow(),
       时间: transaction.occurredAt,

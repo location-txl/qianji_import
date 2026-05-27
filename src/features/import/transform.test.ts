@@ -110,3 +110,53 @@ describe("钱迹预览转换", () => {
     expect(manuallyIncluded.canExport).toBe(true);
   });
 });
+
+describe("日期范围过滤", () => {
+  it("from 排除早于该日期的交易", () => {
+    const early = transaction({ id: "early", occurredAt: "2026-04-15 10:00" });
+    const late = transaction({ id: "late", occurredAt: "2026-05-10 10:00" });
+    const rows = buildPreviewRows([early, late], config, {}, { from: "2026-05-01" });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe("late");
+  });
+
+  it("to 排除晚于该日期的交易", () => {
+    const early = transaction({ id: "early", occurredAt: "2026-04-15 10:00" });
+    const late = transaction({ id: "late", occurredAt: "2026-05-10 10:00" });
+    const rows = buildPreviewRows([early, late], config, {}, { to: "2026-04-30" });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe("early");
+  });
+
+  it("from 和 to 同时设置时形成闭区间", () => {
+    const before = transaction({ id: "before", occurredAt: "2026-04-30 23:59" });
+    const inside1 = transaction({ id: "inside1", occurredAt: "2026-05-01 00:00" });
+    const inside2 = transaction({ id: "inside2", occurredAt: "2026-05-31 23:59" });
+    const after = transaction({ id: "after", occurredAt: "2026-06-01 00:00" });
+    const rows = buildPreviewRows([before, inside1, inside2, after], config, {}, { from: "2026-05-01", to: "2026-05-31" });
+    expect(rows.map((r) => r.id)).toEqual(["inside1", "inside2"]);
+  });
+
+  it("未设置日期范围时不过滤", () => {
+    const early = transaction({ id: "early", occurredAt: "2020-01-01 00:00" });
+    const late = transaction({ id: "late", occurredAt: "2030-12-31 23:59" });
+    const rows = buildPreviewRows([early, late], config);
+    expect(rows).toHaveLength(2);
+  });
+
+  it("过滤在退款关联检查之前执行", () => {
+    const original = transaction({ occurredAt: "2026-04-10 08:00" });
+    const refund = transaction({
+      id: "alipay-2-R",
+      sourceRow: 2,
+      direction: "不计收支",
+      transactionKind: "退款",
+      sourceCategory: "退款",
+      status: "退款成功",
+      tradeNo: "R",
+      occurredAt: "2026-04-10 09:00",
+    });
+    const rows = buildPreviewRows([original, refund], config, {}, { from: "2026-05-01" });
+    expect(rows).toHaveLength(0);
+  });
+});

@@ -451,6 +451,16 @@
   max-width: 270px;
 }
 
+.dateFilter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dateFilter input {
+  width: 140px;
+}
+
 .batchBar {
   display: grid;
   grid-template-columns: auto repeat(4, minmax(105px, 1fr)) auto auto auto;

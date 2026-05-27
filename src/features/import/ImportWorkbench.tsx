@@ -44,6 +44,8 @@ export function ImportWorkbench() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<ViewFilter>("all");
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [batch, setBatch] = useState<BatchEdit>(EMPTY_BATCH);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -75,7 +77,10 @@ export function ImportWorkbench() {
     };
   }, []);
 
-  const rows = useMemo(() => buildPreviewRows(transactions, config, overrides), [transactions, config, overrides]);
+  const rows = useMemo(
+    () => buildPreviewRows(transactions, config, overrides, { from: dateFrom || undefined, to: dateTo || undefined }),
+    [transactions, config, overrides, dateFrom, dateTo],
+  );
   const readyRows = rows.filter((row) => row.canExport);
   const pendingRows = rows.filter((row) => !row.canExport);
   const visibleRows = rows.filter((row) => {
@@ -250,6 +255,14 @@ export function ImportWorkbench() {
               <small>{loadedFiles.wechat ? `${loadedFiles.wechat.count} 条已载入` : "支持官方 Excel 流水文件"}</small>
               <input type="file" accept=".xlsx" onChange={(event) => loadFile("wechat", event)} />
             </label>
+            {transactions.length > 0 && (
+              <div className={styles.dateFilter}>
+                <label>日期范围</label>
+                <input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setSelectedIds(new Set()); }} title="起始日期" />
+                <span>—</span>
+                <input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setSelectedIds(new Set()); }} title="截止日期" />
+              </div>
+            )}
             {importMessage && <p className={styles.message}>{importMessage}</p>}
           </section>
           <ConfigPanel
