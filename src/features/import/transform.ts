@@ -67,14 +67,16 @@ function matchesRule(transaction: NormalizedTransaction, rule: CategoryRule): bo
   return isTimeInRange(transaction.occurredAt.slice(11, 16), rule.startTime, rule.endTime);
 }
 
-function categoryFor(transaction: NormalizedTransaction, config: AppConfig): string {
+function resolveCategory(transaction: NormalizedTransaction, config: AppConfig): { category: string; subCategory: string } {
   const rule = config.categoryRules.find(
     (candidate) => candidate.category && matchesRule(transaction, candidate),
   );
   if (rule) {
-    return rule.category;
+    return { category: rule.category, subCategory: rule.subCategory };
   }
-  return config.sourceCategoryMappings[`${transaction.source}:${transaction.sourceCategory}`] ?? "";
+  const mapped = config.sourceCategoryMappings[`${transaction.source}:${transaction.sourceCategory}`] ?? "";
+  const parts = mapped.split("/");
+  return { category: parts[0]?.trim() ?? "", subCategory: parts[1]?.trim() ?? "" };
 }
 
 function inferType(transaction: NormalizedTransaction): TemplateType | "" {
@@ -200,10 +202,12 @@ export function buildPreviewRows(
   const specialIssues = collectSpecialIssues(transactions);
 
   return filtered.map((transaction) => {
+    const { category, subCategory } = resolveCategory(transaction, config);
     const template: QianjiTemplateRow = {
       ...emptyTemplateRow(),
       时间: transaction.occurredAt,
-      分类: categoryFor(transaction, config),
+      分类: category,
+      二级分类: subCategory,
       类型: inferType(transaction),
       金额: amountText(transaction.amount),
       账户1: config.paymentMethodMappings[transaction.basePaymentMethod] ?? "",

@@ -36,6 +36,7 @@ const config: AppConfig = {
       startTime: "06:00",
       endTime: "10:00",
       category: "三餐",
+      subCategory: "",
     },
   ],
 };
@@ -51,6 +52,41 @@ describe("钱迹预览转换", () => {
       金额: "12.50",
       账户1: "支付宝",
     });
+  });
+
+  it("规则的 subCategory 填入二级分类", () => {
+    const cfg: AppConfig = {
+      ...structuredClone(DEFAULT_CONFIG),
+      sourceCategoryMappings: {},
+      categoryRules: [
+        { id: "r1", source: "all", keyword: "", startTime: "", endTime: "", category: "三餐", subCategory: "早餐" },
+      ],
+    };
+    const row = buildPreviewRows([transaction()], cfg)[0];
+    expect(row.template.分类).toBe("三餐");
+    expect(row.template.二级分类).toBe("早餐");
+  });
+
+  it("sourceCategoryMappings 中 / 分隔一级和二级分类", () => {
+    const cfg: AppConfig = {
+      ...structuredClone(DEFAULT_CONFIG),
+      sourceCategoryMappings: { "alipay:餐饮美食": "餐饮/早餐" },
+      categoryRules: [],
+    };
+    const row = buildPreviewRows([transaction()], cfg)[0];
+    expect(row.template.分类).toBe("餐饮");
+    expect(row.template.二级分类).toBe("早餐");
+  });
+
+  it("sourceCategoryMappings 无 / 时二级分类为空", () => {
+    const cfg: AppConfig = {
+      ...structuredClone(DEFAULT_CONFIG),
+      sourceCategoryMappings: { "alipay:餐饮美食": "日常餐饮" },
+      categoryRules: [],
+    };
+    const row = buildPreviewRows([transaction()], cfg)[0];
+    expect(row.template.分类).toBe("日常餐饮");
+    expect(row.template.二级分类).toBe("");
   });
 
   it("银行卡未映射时保留为待处理", () => {

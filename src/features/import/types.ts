@@ -31,6 +31,7 @@ export interface CategoryRule {
   startTime: string;
   endTime: string;
   category: string;
+  subCategory: string;
 }
 
 /**

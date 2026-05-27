@@ -1,6 +1,6 @@
 import type { AppConfig, CategoryRule, SourcePlatform } from "./types";
 
-export const COMMON_ACCOUNT_OPTIONS = [];
+export const COMMON_ACCOUNT_OPTIONS:string[] = [];
 
 export const DEFAULT_CONFIG: AppConfig = {
   accounts: [...COMMON_ACCOUNT_OPTIONS],
@@ -49,6 +49,7 @@ function validateRule(value: unknown, index: number): CategoryRule {
   const startTime = requireString(rule.startTime ?? "", `categoryRules[${index}].startTime`);
   const endTime = requireString(rule.endTime ?? "", `categoryRules[${index}].endTime`);
   const category = requireString(rule.category, `categoryRules[${index}].category`);
+  const subCategory = requireString(rule.subCategory ?? "", `categoryRules[${index}].subCategory`);
 
   if (!id || !SOURCES.has(source as SourcePlatform | "all")) {
     throw new Error(`categoryRules[${index}] 的来源无效`);
@@ -67,6 +68,7 @@ function validateRule(value: unknown, index: number): CategoryRule {
     startTime,
     endTime,
     category,
+    subCategory,
   };
 }
 

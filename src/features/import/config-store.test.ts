@@ -23,6 +23,7 @@ describe("本地配置存储", () => {
             startTime: "06:00",
             endTime: "10:00",
             category: "三餐",
+            subCategory: "",
           },
         ],
       },
@@ -39,8 +40,25 @@ describe("本地配置存储", () => {
     expect(() =>
       parseAppConfig({
         ...DEFAULT_CONFIG,
-        categoryRules: [{ id: "bad", source: "all", keyword: "", startTime: "", endTime: "", category: "" }],
+        categoryRules: [{ id: "bad", source: "all", keyword: "", startTime: "", endTime: "", category: "", subCategory: "" }],
       }),
     ).toThrow("必须设置目标分类");
+  });
+
+  it("规则缺少 subCategory 字段时默认为空字符串", () => {
+    const result = parseAppConfig({
+      ...DEFAULT_CONFIG,
+      categoryRules: [{ id: "r1", source: "all", keyword: "", startTime: "", endTime: "", category: "三餐" }],
+    });
+    expect(result.categoryRules[0].subCategory).toBe("");
+  });
+
+  it("拒绝 subCategory 非文本的规则", () => {
+    expect(() =>
+      parseAppConfig({
+        ...DEFAULT_CONFIG,
+        categoryRules: [{ id: "bad", source: "all", keyword: "", startTime: "", endTime: "", category: "三餐", subCategory: 123 }],
+      }),
+    ).toThrow("必须是文本");
   });
 });

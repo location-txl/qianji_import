@@ -91,6 +91,7 @@ export function ConfigPanel({
           startTime: "",
           endTime: "",
           category: "",
+          subCategory: "",
         },
       ],
     });
@@ -181,6 +182,7 @@ export function ConfigPanel({
 
       <div className={styles.configBlock}>
         <h3>来源分类 → 钱迹分类</h3>
+        <p className={styles.helper}>用 <code>/</code> 分隔一级和二级分类，如 <code>餐饮/早餐</code>。</p>
         {categoryKeys.length === 0 ? (
           <p className={styles.emptyHint}>支付宝分类会在上传后出现；微信可通过下方规则分类。</p>
         ) : (
@@ -193,7 +195,7 @@ export function ConfigPanel({
                   <input
                     value={config.sourceCategoryMappings[key] ?? ""}
                     onChange={(event) => changeMapping("sourceCategoryMappings", key, event.target.value)}
-                    placeholder="钱迹分类"
+                    placeholder="一级分类/二级分类"
                   />
                 </label>
               );
@@ -207,7 +209,7 @@ export function ConfigPanel({
           <h3>自动分类规则</h3>
           <button className={styles.textButton} type="button" onClick={addRule}>+ 新规则</button>
         </div>
-        <p className={styles.helper}>按顺序首个匹配生效，例如商户包含“京东便利店”且时间在 06:00-10:00，分类为“三餐”。</p>
+        <p className={styles.helper}>按顺序首个匹配生效，例如商户包含”京东便利店”且时间在 06:00-10:00，一级分类”三餐”、二级分类”早餐”。</p>
         <div className={styles.ruleList}>
           {config.categoryRules.map((rule, index) => (
             <div className={styles.ruleCard} key={rule.id}>
@@ -236,7 +238,12 @@ export function ConfigPanel({
                 <input
                   value={rule.category}
                   onChange={(event) => updateRule(rule.id, { category: event.target.value })}
-                  placeholder="目标分类"
+                  placeholder="一级分类"
+                />
+                <input
+                  value={rule.subCategory}
+                  onChange={(event) => updateRule(rule.id, { subCategory: event.target.value })}
+                  placeholder="二级分类（可选）"
                 />
               </div>
             </div>
