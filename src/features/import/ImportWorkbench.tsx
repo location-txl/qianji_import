@@ -22,7 +22,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { InputGroup, InputGroupInput, InputGroupAddon } from "@/components/ui/input-group";
-import { Search, Download } from "lucide-react";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Search, Download, Settings2 } from "lucide-react";
 
 type ViewFilter = "all" | "ready" | "pending";
 
@@ -55,6 +56,7 @@ export function ImportWorkbench() {
   const [saving, setSaving] = useState(false);
   const [configMessage, setConfigMessage] = useState("");
   const [importMessage, setImportMessage] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -246,14 +248,15 @@ export function ImportWorkbench() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1560px] grid-cols-[minmax(320px,400px)_minmax(0,1fr)] items-start gap-5">
-        <aside className="flex flex-col gap-4">
-          <Card>
-            <CardHeader>
-              <p className="font-mono text-[11px] font-bold tracking-[0.18em] text-accent">01 / 导入文件</p>
-              <CardTitle>来源账单</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
+      <div className="mx-auto flex max-w-[1560px] flex-col gap-5">
+        {/* 导入文件 */}
+        <Card>
+          <CardHeader>
+            <p className="font-mono text-[11px] font-bold tracking-[0.18em] text-accent">01 / 导入文件</p>
+            <CardTitle>来源账单</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3">
               <label className="block cursor-pointer rounded-sm border border-dashed border-[#c5b9a7] bg-[#fcf8f0] p-4 transition-colors hover:border-accent hover:bg-[#fff8ee]">
                 <span className="block text-xs font-bold text-accent">支付宝 CSV</span>
                 <strong className="my-1.5 block truncate">{loadedFiles.alipay?.name ?? "选择交易明细"}</strong>
@@ -270,6 +273,8 @@ export function ImportWorkbench() {
                 </small>
                 <input type="file" accept=".xlsx" onChange={(event) => loadFile("wechat", event)} className="mt-3 block max-w-full text-xs text-muted-foreground" />
               </label>
+            </div>
+            <div className="mt-3 flex items-center gap-4">
               {transactions.length > 0 && (
                 <div className="flex items-center gap-1.5">
                   <label className="text-sm">日期范围</label>
@@ -281,19 +286,11 @@ export function ImportWorkbench() {
               {importMessage && (
                 <div className="rounded-sm bg-primary/5 p-2.5 text-sm text-primary">{importMessage}</div>
               )}
-            </CardContent>
-          </Card>
-          <ConfigPanel
-            config={config}
-            transactions={transactions}
-            dirty={dirty}
-            saving={saving}
-            message={configMessage}
-            onChange={updateConfig}
-            onSave={saveConfig}
-          />
-        </aside>
+            </div>
+          </CardContent>
+        </Card>
 
+        {/* 核对并导出 */}
         <Card className="min-h-[720px]">
           <CardHeader>
             <div className="flex items-start justify-between gap-3">
@@ -383,7 +380,7 @@ export function ImportWorkbench() {
               <Alert className="mb-3 border-warning bg-warning text-warning-foreground">
                 <AlertTitle>{pendingRows.length} 条记录未进入默认导出。</AlertTitle>
                 <AlertDescription>
-                  在“待处理”中核对问题；确定合法类型与账户后，选中并点击“纳入导出”。
+                  在{'"'}待处理{'"'}中核对问题；确定合法类型与账户后，选中并点击{'"'}纳入导出{'"'}。
                 </AlertDescription>
               </Alert>
             )}
@@ -397,6 +394,32 @@ export function ImportWorkbench() {
           </CardContent>
         </Card>
       </div>
+
+      {/* 浮动映射规则按钮 */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogTrigger
+          render={
+            <button
+              type="button"
+              className="fixed bottom-6 right-6 z-40 flex h-12 items-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground shadow-lg transition-colors hover:bg-primary/90 cursor-pointer"
+            >
+              <Settings2 className="size-4" />
+              映射规则
+            </button>
+          }
+        />
+        <DialogContent className="sm:max-w-4xl max-h-[85vh] flex flex-col">
+          <ConfigPanel
+            config={config}
+            transactions={transactions}
+            dirty={dirty}
+            saving={saving}
+            message={configMessage}
+            onChange={updateConfig}
+            onSave={saveConfig}
+          />
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

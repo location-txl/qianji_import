@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Card, CardContent, CardHeader, CardTitle, CardAction, CardDescription } from "@/components/ui/card";
+import { DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { ChevronUp, ChevronDown, Trash2, X } from "lucide-react";
 
 interface ConfigPanelProps {
@@ -155,20 +155,18 @@ export function ConfigPanel({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <p className="text-accent font-mono text-[11px] font-bold tracking-[0.18em]">02 / 映射规则</p>
-        <CardTitle>账户与分类</CardTitle>
-        <CardDescription className="font-mono text-xs">
+    <>
+      <DialogHeader>
+        <div>
+          <p className="font-mono text-[11px] font-bold tracking-[0.18em] text-accent">02 / 映射规则</p>
+          <DialogTitle className="font-title text-2xl">账户与分类</DialogTitle>
+        </div>
+        <DialogDescription className="font-mono text-xs">
           配置仅写入本机 <code>data/config.json</code>，不会保存上传账单或预览明细。
-        </CardDescription>
-        <CardAction>
-          <Button disabled={!dirty || saving} onClick={onSave}>
-            {saving ? "保存中" : dirty ? "保存配置" : "已保存"}
-          </Button>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-0">
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="flex flex-1 flex-col gap-0 overflow-y-auto">
         {message && (
           <div className="mb-4 rounded-sm bg-primary/5 p-2.5 text-sm text-primary">{message}</div>
         )}
@@ -280,7 +278,7 @@ export function ConfigPanel({
             </Button>
           </div>
           <p className="mb-3 text-xs text-muted-foreground leading-relaxed">
-            按顺序首个匹配生效，例如商户包含“京东便利店”且时间在 06:00-10:00，一级分类“三餐”、二级分类“早餐”。
+            按顺序首个匹配生效，例如商户包含{'"'}京东便利店{'"'}且时间在 06:00-10:00，一级分类{'"'}三餐{'"'}、二级分类{'"'}早餐{'"'}。
           </p>
           <div className="flex flex-col gap-2.5">
             {config.categoryRules.map((rule, index) => (
@@ -315,7 +313,7 @@ export function ConfigPanel({
                     <Trash2 data-icon />
                   </Button>
                 </div>
-                <div className="grid grid-cols-[1fr_1.45fr] gap-1.5 [&>input:last-child]:col-span-full">
+                <div className="grid grid-cols-3 gap-1.5">
                   <select
                     value={rule.source}
                     onChange={(event) => updateRule(rule.id, { source: event.target.value as CategoryRule["source"] })}
@@ -330,18 +328,20 @@ export function ConfigPanel({
                     onChange={(event) => updateRule(rule.id, { keyword: event.target.value })}
                     placeholder="商户/商品关键词"
                   />
-                  <Input type="time" value={rule.startTime} onChange={(event) => updateRule(rule.id, { startTime: event.target.value })} />
-                  <Input type="time" value={rule.endTime} onChange={(event) => updateRule(rule.id, { endTime: event.target.value })} />
-                  <Input
-                    value={rule.category}
-                    onChange={(event) => updateRule(rule.id, { category: event.target.value })}
-                    placeholder="一级分类"
-                  />
-                  <Input
-                    value={rule.subCategory}
-                    onChange={(event) => updateRule(rule.id, { subCategory: event.target.value })}
-                    placeholder="二级分类（可选）"
-                  />
+                  <div className="col-span-3 grid grid-cols-4 gap-1.5">
+                    <Input type="time" value={rule.startTime} onChange={(event) => updateRule(rule.id, { startTime: event.target.value })} />
+                    <Input type="time" value={rule.endTime} onChange={(event) => updateRule(rule.id, { endTime: event.target.value })} />
+                    <Input
+                      value={rule.category}
+                      onChange={(event) => updateRule(rule.id, { category: event.target.value })}
+                      placeholder="一级分类"
+                    />
+                    <Input
+                      value={rule.subCategory}
+                      onChange={(event) => updateRule(rule.id, { subCategory: event.target.value })}
+                      placeholder="二级分类（可选）"
+                    />
+                  </div>
                 </div>
               </div>
             ))}
@@ -395,7 +395,7 @@ export function ConfigPanel({
                     <Trash2 data-icon />
                   </Button>
                 </div>
-                <div className="grid grid-cols-[1fr_1.45fr] gap-1.5">
+                <div className="grid grid-cols-4 gap-1.5">
                   <select
                     value={rule.source}
                     onChange={(event) => updateExcludeRule(rule.id, { source: event.target.value as ExcludeRule["source"] })}
@@ -420,11 +420,20 @@ export function ConfigPanel({
             )}
           </div>
         </div>
+      </div>
 
-        <datalist id="account-options">
-          {accountOptions.map((account) => <option key={account} value={account} />)}
-        </datalist>
-      </CardContent>
-    </Card>
+      <DialogFooter>
+        <div className="flex items-center gap-3">
+          {message && <span className="text-sm text-primary">{message}</span>}
+          <Button disabled={!dirty || saving} onClick={onSave}>
+            {saving ? "保存中" : dirty ? "保存配置" : "已保存"}
+          </Button>
+        </div>
+      </DialogFooter>
+
+      <datalist id="account-options">
+        {accountOptions.map((account) => <option key={account} value={account} />)}
+      </datalist>
+    </>
   );
 }
