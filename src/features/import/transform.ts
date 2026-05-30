@@ -54,6 +54,14 @@ function amountCents(value: number | string): number | null {
   return Number.isFinite(amount) ? Math.round(amount * 100) : null;
 }
 
+function duplicateKeyFromParts(occurredAt: string, amount: number | string, account: string): string {
+  const cents = amountCents(amount);
+  const trimmedAccount = account.trim();
+  return cents === null || !occurredAt || !trimmedAccount
+    ? ""
+    : [occurredAt.slice(0, 16), cents.toString(), trimmedAccount].join("|");
+}
+
 function noteFor(transaction: NormalizedTransaction): string {
   const source = transaction.source === "alipay" ? "支付宝" : "微信";
   return [source, transaction.counterparty, transaction.item, transaction.originalNote]
@@ -203,19 +211,11 @@ function validateTemplate(template: QianjiTemplateRow): RowIssue[] {
 }
 
 function existingRecordKey(record: ExistingQianjiRecord): string {
-  const cents = amountCents(record.amount);
-  const account = record.account.trim();
-  return cents === null || !record.occurredAt || !account
-    ? ""
-    : [record.occurredAt.slice(0, 16), cents.toString(), account].join("|");
+  return duplicateKeyFromParts(record.occurredAt, record.amount, record.account);
 }
 
 function templateDuplicateKey(template: QianjiTemplateRow): string {
-  const cents = amountCents(template.金额);
-  const account = template.账户1.trim();
-  return cents === null || !template.时间 || !account
-    ? ""
-    : [template.时间.slice(0, 16), cents.toString(), account].join("|");
+  return duplicateKeyFromParts(template.时间, template.金额, template.账户1);
 }
 
 function buildExistingCounts(records: ExistingQianjiRecord[]): Map<string, number> {
