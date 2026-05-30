@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { DEFAULT_CONFIG, parseAppConfig } from "./config";
 import { ConfigPanel } from "./ConfigPanel";
 import { createQianjiCsv, updateTemplateFields } from "./export";
-import { parseAlipayBuffer, parseWechatBuffer } from "./parsers";
+import { parseAlipayBuffer, parseQianjiExistingCsvBuffer, parseWechatBuffer } from "./parsers";
 import { PreviewTable } from "./PreviewTable";
 import { buildPreviewRows } from "./transform";
 import type {
   AppConfig,
+  ExistingQianjiRecord,
   NormalizedTransaction,
+  PreviewRow,
   QianjiHeader,
   QianjiTemplateRow,
   RowOverride,
@@ -22,10 +24,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { InputGroup, InputGroupInput, InputGroupAddon } from "@/components/ui/input-group";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Search, Download, Settings2 } from "lucide-react";
 
-type ViewFilter = "all" | "ready" | "pending";
+type ViewFilter = "all" | "ready" | "pending" | "duplicate";
 
 interface LoadedFile {
   name: string;
@@ -39,16 +43,65 @@ interface BatchEdit {
   备注: string;
 }
 
+interface DuplicateConfirmGroup {
+  key: string;
+  existingCount: number;
+  rows: PreviewRow[];
+}
+
 const EMPTY_BATCH: BatchEdit = { 分类: "", 类型: "", 账户1: "", 备注: "" };
+
+function isDuplicateRow(row: { issues: { code: string }[] }): boolean {
+  return row.issues.some((issue) => issue.code === "duplicate_existing" || issue.code === "duplicate_pending");
+}
+
+function isDuplicatePendingRow(row: PreviewRow): boolean {
+  return row.issues.some((issue) => issue.code === "duplicate_pending");
+}
+
+function sourceLabel(source: SourcePlatform): string {
+  return source === "alipay" ? "支付宝" : "微信";
+}
+
+function buildDuplicateConfirmGroups(rows: PreviewRow[]): DuplicateConfirmGroup[] {
+  const groups = new Map<string, PreviewRow[]>();
+  rows.forEach((row) => {
+    if (!row.duplicateKey || !isDuplicatePendingRow(row)) {
+      return;
+    }
+    groups.set(row.duplicateKey, [...(groups.get(row.duplicateKey) ?? []), row]);
+  });
+  return Array.from(groups, ([key, groupedRows]) => ({
+    key,
+    rows: groupedRows,
+    existingCount: groupedRows[0].duplicateExistingCount ?? 1,
+  }));
+}
+
+function withoutDuplicateDecision(override: RowOverride): RowOverride | null {
+  const rest: RowOverride = { ...override };
+  delete rest.duplicateExisting;
+  delete rest.duplicateKey;
+  const hasFields = Boolean(rest.fields && Object.keys(rest.fields).length > 0);
+  return hasFields || rest.include !== undefined ? rest : null;
+}
 
 export function ImportWorkbench() {
   const [config, setConfig] = useState<AppConfig>(structuredClone(DEFAULT_CONFIG));
   const [transactions, setTransactions] = useState<NormalizedTransaction[]>([]);
+  const [existingRecords, setExistingRecords] = useState<ExistingQianjiRecord[]>([]);
   const [overrides, setOverrides] = useState<Record<string, RowOverride>>({});
   const [loadedFiles, setLoadedFiles] = useState<Partial<Record<SourcePlatform, LoadedFile>>>({});
+  const [loadedExistingFile, setLoadedExistingFile] = useState<LoadedFile | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<ViewFilter>("all");
   const [search, setSearch] = useState("");
+  const [closedDuplicateGroupId, setClosedDuplicateGroupId] = useState("");
+  const [autoOpenedDuplicateGroupId, setAutoOpenedDuplicateGroupId] = useState("");
+  const [duplicateSelectionState, setDuplicateSelectionState] = useState<{ groupId: string; ids: Set<string> }>({
+    groupId: "",
+    ids: new Set(),
+  });
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [batch, setBatch] = useState<BatchEdit>(EMPTY_BATCH);
@@ -84,16 +137,34 @@ export function ImportWorkbench() {
   }, []);
 
   const rows = useMemo(
-    () => buildPreviewRows(transactions, config, overrides, { from: dateFrom || undefined, to: dateTo || undefined }),
-    [transactions, config, overrides, dateFrom, dateTo],
+    () => buildPreviewRows(transactions, config, overrides, {
+      from: dateFrom || undefined,
+      to: dateTo || undefined,
+      existingRecords,
+    }),
+    [transactions, config, overrides, dateFrom, dateTo, existingRecords],
   );
   const readyRows = rows.filter((row) => row.canExport);
-  const pendingRows = rows.filter((row) => !row.canExport);
+  const duplicateRows = rows.filter(isDuplicateRow);
+  const pendingRows = rows.filter((row) => !row.canExport && !isDuplicateRow(row));
+  const duplicateConfirmGroups = useMemo(() => buildDuplicateConfirmGroups(rows), [rows]);
+  const activeDuplicateGroup = duplicateConfirmGroups[0] ?? null;
+  const hasActiveDuplicateGroup = Boolean(activeDuplicateGroup);
+  const activeDuplicateGroupId = activeDuplicateGroup
+    ? `${activeDuplicateGroup.key}:${activeDuplicateGroup.rows.map((row) => row.id).join(",")}:${activeDuplicateGroup.existingCount}`
+    : "";
+  const duplicateDialogOpen = hasActiveDuplicateGroup && closedDuplicateGroupId !== activeDuplicateGroupId;
+  const duplicateSelection = duplicateSelectionState.groupId === activeDuplicateGroupId
+    ? duplicateSelectionState.ids
+    : new Set<string>();
   const visibleRows = rows.filter((row) => {
     if (filter === "ready" && !row.canExport) {
       return false;
     }
-    if (filter === "pending" && row.canExport) {
+    if (filter === "pending" && (row.canExport || isDuplicateRow(row))) {
+      return false;
+    }
+    if (filter === "duplicate" && !isDuplicateRow(row)) {
       return false;
     }
     const keyword = search.trim();
@@ -103,12 +174,24 @@ export function ImportWorkbench() {
         row.transaction.counterparty,
         row.transaction.item,
         row.transaction.paymentMethod,
+        row.template.账户1,
         row.template.备注,
         row.template.分类,
       ].some((value) => value.includes(keyword))
     );
   });
   const totalAmount = readyRows.reduce((sum, row) => sum + Number(row.template.金额 || 0), 0);
+
+  useEffect(() => {
+    if (!activeDuplicateGroupId || autoOpenedDuplicateGroupId === activeDuplicateGroupId) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setClosedDuplicateGroupId("");
+      setAutoOpenedDuplicateGroupId(activeDuplicateGroupId);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [activeDuplicateGroupId, autoOpenedDuplicateGroupId]);
 
   function updateConfig(next: AppConfig) {
     setConfig(next);
@@ -154,9 +237,38 @@ export function ImportWorkbench() {
       setOverrides((current) =>
         Object.fromEntries(Object.entries(current).filter(([id]) => !id.startsWith(`${source}-`))),
       );
+      setAutoOpenedDuplicateGroupId("");
       setSelectedIds(new Set());
       setLoadedFiles((current) => ({ ...current, [source]: { name: file.name, count: parsed.length } }));
       setImportMessage(`${source === "alipay" ? "支付宝" : "微信"}账单已解析，共 ${parsed.length} 条记录。`);
+    } catch (error) {
+      setImportMessage((error as Error).message);
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  async function loadExistingQianjiFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    setImportMessage("");
+    try {
+      const parsed = parseQianjiExistingCsvBuffer(await file.arrayBuffer());
+      setExistingRecords(parsed);
+      setOverrides((current) =>
+        Object.fromEntries(
+          Object.entries(current).flatMap(([id, override]) => {
+            const next = withoutDuplicateDecision(override);
+            return next ? [[id, next]] : [];
+          }),
+        ),
+      );
+      setAutoOpenedDuplicateGroupId("");
+      setSelectedIds(new Set());
+      setLoadedExistingFile({ name: file.name, count: parsed.length });
+      setImportMessage(`钱迹已有账单已载入，共 ${parsed.length} 条可参与去重。`);
     } catch (error) {
       setImportMessage((error as Error).message);
     } finally {
@@ -216,6 +328,42 @@ export function ImportWorkbench() {
     });
   }
 
+  function selectDuplicateCandidate(id: string, checked: boolean) {
+    setDuplicateSelectionState((current) => {
+      const currentIds = current.groupId === activeDuplicateGroupId ? current.ids : new Set<string>();
+      const next = new Set(currentIds);
+      if (checked) {
+        if (activeDuplicateGroup && next.size >= activeDuplicateGroup.existingCount) {
+          return current;
+        }
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return { groupId: activeDuplicateGroupId, ids: next };
+    });
+  }
+
+  function resolveDuplicateGroup(duplicateIds: Set<string>) {
+    if (!activeDuplicateGroup) {
+      return;
+    }
+    const ids = activeDuplicateGroup.rows.map((row) => row.id);
+    setOverrides((current) => {
+      const next = { ...current };
+      ids.forEach((id) => {
+        next[id] = {
+          ...next[id],
+          duplicateExisting: duplicateIds.has(id),
+          duplicateKey: activeDuplicateGroup.key,
+        };
+      });
+      return next;
+    });
+    setSelectedIds(new Set());
+    setClosedDuplicateGroupId(activeDuplicateGroupId);
+  }
+
   function downloadCsv() {
     const content = createQianjiCsv(rows);
     const link = document.createElement("a");
@@ -256,14 +404,22 @@ export function ImportWorkbench() {
             <CardTitle>来源账单</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
+              <label className="block cursor-pointer rounded-sm border border-dashed border-[#c5b9a7] bg-[#fcf8f0] p-4 transition-colors hover:border-accent hover:bg-[#fff8ee]">
+                <span className="block text-xs font-bold text-accent">钱迹已有 CSV</span>
+                <strong className="my-1.5 block truncate">{loadedExistingFile?.name ?? "选择已导出账单"}</strong>
+                <small className="block text-muted-foreground leading-relaxed">
+                  {loadedExistingFile ? `${loadedExistingFile.count} 条参与去重` : "按时间、金额、账户匹配已有记录"}
+                </small>
+                <input name="existing-qianji-csv" type="file" accept=".csv,text/csv" aria-label="选择钱迹已有 CSV" onChange={loadExistingQianjiFile} className="mt-3 block max-w-full text-xs text-muted-foreground" />
+              </label>
               <label className="block cursor-pointer rounded-sm border border-dashed border-[#c5b9a7] bg-[#fcf8f0] p-4 transition-colors hover:border-accent hover:bg-[#fff8ee]">
                 <span className="block text-xs font-bold text-accent">支付宝 CSV</span>
                 <strong className="my-1.5 block truncate">{loadedFiles.alipay?.name ?? "选择交易明细"}</strong>
                 <small className="block text-muted-foreground leading-relaxed">
                   {loadedFiles.alipay ? `${loadedFiles.alipay.count} 条已载入` : "支持含说明行的官方导出文件"}
                 </small>
-                <input type="file" accept=".csv,text/csv" onChange={(event) => loadFile("alipay", event)} className="mt-3 block max-w-full text-xs text-muted-foreground" />
+                <input name="alipay-csv" type="file" accept=".csv,text/csv" aria-label="选择支付宝 CSV" onChange={(event) => loadFile("alipay", event)} className="mt-3 block max-w-full text-xs text-muted-foreground" />
               </label>
               <label className="block cursor-pointer rounded-sm border border-dashed border-[#c5b9a7] bg-[#fcf8f0] p-4 transition-colors hover:border-accent hover:bg-[#fff8ee]">
                 <span className="block text-xs font-bold text-accent">微信 XLSX</span>
@@ -271,7 +427,7 @@ export function ImportWorkbench() {
                 <small className="block text-muted-foreground leading-relaxed">
                   {loadedFiles.wechat ? `${loadedFiles.wechat.count} 条已载入` : "支持官方 Excel 流水文件"}
                 </small>
-                <input type="file" accept=".xlsx" onChange={(event) => loadFile("wechat", event)} className="mt-3 block max-w-full text-xs text-muted-foreground" />
+                <input name="wechat-xlsx" type="file" accept=".xlsx" aria-label="选择微信 XLSX" onChange={(event) => loadFile("wechat", event)} className="mt-3 block max-w-full text-xs text-muted-foreground" />
               </label>
             </div>
             <div className="mt-3 flex items-center gap-4">
@@ -305,11 +461,12 @@ export function ImportWorkbench() {
             </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-0">
-            <div className="mb-5 grid grid-cols-4 gap-2.5">
+            <div className="mb-5 grid grid-cols-5 gap-2.5">
               {[
                 { label: "载入记录", value: rows.length },
                 { label: "可导出", value: readyRows.length },
                 { label: "待处理", value: pendingRows.length, warn: pendingRows.length > 0 },
+                { label: "重复", value: duplicateRows.length, warn: duplicateRows.length > 0 },
                 { label: "导出金额合计", value: `¥ ${totalAmount.toFixed(2)}` },
               ].map(({ label, value, warn }) => (
                 <div
@@ -342,6 +499,9 @@ export function ImportWorkbench() {
                 <ToggleGroupItem value="pending" className="h-[34px] rounded-sm px-4 data-pressed:bg-primary data-pressed:text-primary-foreground">
                   待处理 {pendingRows.length}
                 </ToggleGroupItem>
+                <ToggleGroupItem value="duplicate" className="h-[34px] rounded-sm px-4 data-pressed:bg-primary data-pressed:text-primary-foreground">
+                  重复 {duplicateRows.length}
+                </ToggleGroupItem>
               </ToggleGroup>
               <InputGroup className="max-w-[270px]">
                 <InputGroupInput
@@ -360,7 +520,7 @@ export function ImportWorkbench() {
                 批量处理 {selectedIds.size ? `(${selectedIds.size})` : ""}
               </strong>
               <Input value={batch.分类} onChange={(event) => setBatch({ ...batch, 分类: event.target.value })} placeholder="分类" />
-              <select value={batch.类型} onChange={(event) => setBatch({ ...batch, 类型: event.target.value })} className="h-[34px] rounded-sm border border-input bg-white px-2 text-sm">
+              <select name="batch-type" aria-label="批量设置类型" value={batch.类型} onChange={(event) => setBatch({ ...batch, 类型: event.target.value })} className="h-[34px] rounded-sm border border-input bg-white px-2 text-sm">
                 <option value="">类型不改</option>
                 <option value="收入">收入</option>
                 <option value="支出">支出</option>
@@ -376,6 +536,17 @@ export function ImportWorkbench() {
               <Button variant="ghost" size="sm" type="button" disabled={!selectedIds.size} onClick={() => setSelectedIds(new Set())} className="text-accent">清除选中</Button>
             </div>
 
+            {duplicateConfirmGroups.length > 0 && (
+              <Alert className="mb-3 border-warning bg-warning text-warning-foreground">
+                <AlertTitle>{duplicateConfirmGroups.length} 组疑似重复需要确认。</AlertTitle>
+                <AlertDescription className="flex items-center justify-between gap-3">
+                  <span>同一时间、金额、账户下出现多条候选，先确认实际重复项再导出。</span>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setClosedDuplicateGroupId("")}>
+                    确认重复
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
             {pendingRows.length > 0 && (
               <Alert className="mb-3 border-warning bg-warning text-warning-foreground">
                 <AlertTitle>{pendingRows.length} 条记录未进入默认导出。</AlertTitle>
@@ -418,6 +589,72 @@ export function ImportWorkbench() {
             onChange={updateConfig}
             onSave={saveConfig}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={duplicateDialogOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setClosedDuplicateGroupId("");
+          } else if (duplicateDialogOpen) {
+            setClosedDuplicateGroupId(activeDuplicateGroupId);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>确认疑似重复账单</DialogTitle>
+            <DialogDescription>
+              钱迹已有 {activeDuplicateGroup?.existingCount ?? 0} 条同时间、金额、账户记录；本次匹配到 {activeDuplicateGroup?.rows.length ?? 0} 条候选。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-2 overflow-auto pr-1">
+            {activeDuplicateGroup?.rows.map((row) => {
+              const checked = duplicateSelection.has(row.id);
+              const limitReached = duplicateSelection.size >= activeDuplicateGroup.existingCount;
+              return (
+                <label
+                  key={row.id}
+                  className={cn(
+                    "grid cursor-pointer grid-cols-[auto_1fr] gap-3 rounded-sm border border-border bg-card p-3 transition-colors hover:bg-muted/40",
+                    checked && "border-accent bg-warning",
+                  )}
+                >
+                  <Checkbox
+                    checked={checked}
+                    disabled={!checked && limitReached}
+                    onCheckedChange={(value) => selectDuplicateCandidate(row.id, value === true)}
+                    aria-label={`标记 ${sourceLabel(row.source)} 第 ${row.transaction.sourceRow} 行为重复`}
+                    className="mt-1"
+                  />
+                  <span className="min-w-0">
+                    <span className="mb-2 flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary">{sourceLabel(row.source)}</Badge>
+                      <Badge variant="outline">来源第 {row.transaction.sourceRow} 行</Badge>
+                      <strong className="font-mono text-sm">{row.template.时间}</strong>
+                      <strong className="font-mono text-sm">¥ {Number(row.template.金额 || 0).toFixed(2)}</strong>
+                      <span className="text-sm text-muted-foreground">{row.template.账户1}</span>
+                    </span>
+                    <span className="block truncate font-medium">
+                      {row.transaction.counterparty || row.transaction.item || row.template.备注 || "未命名交易"}
+                    </span>
+                    <small className="mt-1 block truncate text-muted-foreground">{row.template.备注}</small>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => resolveDuplicateGroup(new Set())}>
+              都不重复
+            </Button>
+            <Button type="button" onClick={() => resolveDuplicateGroup(duplicateSelection)}>
+              确认选择
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </main>

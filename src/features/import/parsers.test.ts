@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
-import { getBasePaymentMethod, parseAlipayBuffer, parseWechatBuffer } from "./parsers";
+import {
+  getBasePaymentMethod,
+  parseAlipayBuffer,
+  parseQianjiExistingCsvBuffer,
+  parseWechatBuffer,
+} from "./parsers";
 
 const ALIPAY_GB18030_FIXTURE =
   "tbyz9tDFz6KjurLiytQKLS0tLS0tLS0tLS0tLS0tLQq9u9LXyrG85Cy9u9LXt9bA4Cy9u9LXttS3vSy21Le91cu6xSzJzMa3y7XD9yzK1S/Wpyy98LbuLMrVL7i2v+63vcq9LL270tfXtMysLL270te2qbWlusUsycy80raptaW6xSyxuNeiCjIwMjYtMDUtMDEgMDg6MzA6MDAsss3S+8PAyrMsvqm2q7HjwPu16iws1OeyzSzWp7P2LDEyLjUwLNPgtu6xpia67LD8LL270tezybmmLFQxLE0xLLLiytSxuNeiCg==";
@@ -42,5 +47,24 @@ describe("账单解析", () => {
 
   it("从含优惠后缀的付款方式中取得实际资金源", () => {
     expect(getBasePaymentMethod("招商银行信用卡(1113)&碰一下立减")).toBe("招商银行信用卡(1113)");
+  });
+
+  it("解析钱迹导出 CSV 并忽略不能参与去重的记录", () => {
+    const csv = [
+      "\uFEFFID,时间,分类,二级分类,类型,金额,币种,账户1,账户2,备注,记账者,关联账单",
+      "qj1,2026-05-26 12:47:00,三餐,,支出,16.0,CNY,招商银行信用卡,,支付宝 | 京东便利店,安生,",
+      "qj2,2026-05-26 12:48:00,三餐,,支出,18.0,CNY,,,无账户记录,安生,",
+    ].join("\r\n");
+    const rows = parseQianjiExistingCsvBuffer(new TextEncoder().encode(csv).buffer);
+
+    expect(rows).toEqual([
+      {
+        id: "qj1",
+        sourceRow: 2,
+        occurredAt: "2026-05-26 12:47",
+        amount: 16,
+        account: "招商银行信用卡",
+      },
+    ]);
   });
 });

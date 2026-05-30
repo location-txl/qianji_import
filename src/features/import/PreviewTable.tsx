@@ -31,6 +31,8 @@ function TemplateInput({
   if (header === "类型") {
     return (
       <select
+        name={`${row.id}-${header}`}
+        aria-label={`${sourceName(row)} ${header}`}
         value={row.template[header]}
         onChange={(event) => onChange(row.id, header, event.target.value)}
         className="h-8 min-w-[105px] rounded-sm border border-input bg-white/75 px-2 text-xs"

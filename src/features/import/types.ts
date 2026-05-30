@@ -78,6 +78,17 @@ export interface NormalizedTransaction {
   originalNote: string;
 }
 
+/**
+ * 钱迹已有账单导出记录，仅作为本次浏览器会话内的去重参考。
+ */
+export interface ExistingQianjiRecord {
+  id?: string;
+  sourceRow: number;
+  occurredAt: string;
+  amount: number;
+  account: string;
+}
+
 export type RowIssueCode =
   | "refund_pending"
   | "refund_pair_review"
@@ -85,7 +96,9 @@ export type RowIssueCode =
   | "missing_account_mapping"
   | "invalid_status"
   | "invalid_template"
-  | "excluded_by_user";
+  | "excluded_by_user"
+  | "duplicate_existing"
+  | "duplicate_pending";
 
 /**
  * 无法默认写入钱迹模板的原因；所有问题均需要在预览区显式呈现。
@@ -103,6 +116,8 @@ export type QianjiTemplateRow = Record<QianjiHeader, string>;
 export interface RowOverride {
   fields?: Partial<QianjiTemplateRow>;
   include?: boolean;
+  duplicateExisting?: boolean;
+  duplicateKey?: string;
 }
 
 /**
@@ -117,4 +132,7 @@ export interface PreviewRow {
   canExport: boolean;
   manuallyIncluded: boolean;
   manuallyEdited: boolean;
+  duplicateKey?: string;
+  duplicateExistingCount?: number;
+  duplicateCandidateCount?: number;
 }

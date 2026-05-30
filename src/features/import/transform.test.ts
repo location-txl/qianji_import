@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CONFIG } from "./config";
 import { buildPreviewRows } from "./transform";
-import type { AppConfig, NormalizedTransaction } from "./types";
+import type { AppConfig, ExistingQianjiRecord, NormalizedTransaction } from "./types";
 
 function transaction(patch: Partial<NormalizedTransaction> = {}): NormalizedTransaction {
   return {
@@ -21,6 +21,16 @@ function transaction(patch: Partial<NormalizedTransaction> = {}): NormalizedTran
     tradeNo: "A",
     merchantNo: "M1",
     originalNote: "",
+    ...patch,
+  };
+}
+
+function existingRecord(patch: Partial<ExistingQianjiRecord> = {}): ExistingQianjiRecord {
+  return {
+    sourceRow: 2,
+    occurredAt: "2026-05-01 08:30",
+    amount: 12.5,
+    account: "支付宝",
     ...patch,
   };
 }
@@ -280,5 +290,105 @@ describe("关键字排除规则", () => {
     const rows = buildPreviewRows([jd, taobao, keep], cfg);
     expect(rows).toHaveLength(1);
     expect(rows[0].id).toBe("alipay-3");
+  });
+});
+
+describe("钱迹已有账单去重", () => {
+  it("同一分钟、同金额、同账户1 时默认标记为重复并排除导出", () => {
+    const row = buildPreviewRows(
+      [transaction({ originalNote: "备注不同也要判重" })],
+      config,
+      {},
+      { existingRecords: [existingRecord()] },
+    )[0];
+
+    expect(row.canExport).toBe(false);
+    expect(row.issues[0]).toMatchObject({
+      code: "duplicate_existing",
+      message: "钱迹已有记录，默认排除导出。",
+    });
+  });
+
+  it("不看备注，但账户或金额不同不判重", () => {
+    const differentAccount = buildPreviewRows(
+      [transaction()],
+      config,
+      {},
+      { existingRecords: [existingRecord({ account: "微信" })] },
+    )[0];
+    const differentAmount = buildPreviewRows(
+      [transaction()],
+      config,
+      {},
+      { existingRecords: [existingRecord({ amount: 12.51 })] },
+    )[0];
+
+    expect(differentAccount.issues.map((issue) => issue.code)).not.toContain("duplicate_existing");
+    expect(differentAmount.issues.map((issue) => issue.code)).not.toContain("duplicate_existing");
+    expect(differentAccount.canExport).toBe(true);
+    expect(differentAmount.canExport).toBe(true);
+  });
+
+  it("已有记录缺少账户时不参与匹配", () => {
+    const row = buildPreviewRows(
+      [transaction()],
+      config,
+      {},
+      { existingRecords: [existingRecord({ account: "" })] },
+    )[0];
+
+    expect(row.issues.map((issue) => issue.code)).not.toContain("duplicate_existing");
+    expect(row.canExport).toBe(true);
+  });
+
+  it("重复记录可由用户手动纳入导出", () => {
+    const row = buildPreviewRows(
+      [transaction()],
+      config,
+      { "alipay-1-A": { include: true } },
+      { existingRecords: [existingRecord()] },
+    )[0];
+
+    expect(row.canExport).toBe(true);
+    expect(row.manuallyIncluded).toBe(true);
+    expect(row.issues.map((issue) => issue.code)).toContain("duplicate_existing");
+  });
+
+  it("已有条数少于本次候选条数时交给用户确认", () => {
+    const first = transaction({ id: "alipay-1-A", originalNote: "早餐" });
+    const second = transaction({ id: "alipay-2-B", tradeNo: "B", originalNote: "咖啡" });
+    const rows = buildPreviewRows(
+      [first, second],
+      config,
+      {},
+      { existingRecords: [existingRecord()] },
+    );
+
+    expect(rows.every((row) => !row.canExport)).toBe(true);
+    expect(rows.map((row) => row.issues[0].code)).toEqual(["duplicate_pending", "duplicate_pending"]);
+    expect(rows[0]).toMatchObject({
+      duplicateExistingCount: 1,
+      duplicateCandidateCount: 2,
+    });
+  });
+
+  it("用户确认后只排除选中的重复候选", () => {
+    const duplicateKey = "2026-05-01 08:30|1250|支付宝";
+    const first = transaction({ id: "alipay-1-A", originalNote: "早餐" });
+    const second = transaction({ id: "alipay-2-B", tradeNo: "B", originalNote: "咖啡" });
+    const rows = buildPreviewRows(
+      [first, second],
+      config,
+      {
+        "alipay-1-A": { duplicateExisting: true, duplicateKey },
+        "alipay-2-B": { duplicateExisting: false, duplicateKey },
+      },
+      { existingRecords: [existingRecord()] },
+    );
+
+    expect(rows[0].canExport).toBe(false);
+    expect(rows[0].issues.map((issue) => issue.code)).toContain("duplicate_existing");
+    expect(rows[1].canExport).toBe(true);
+    expect(rows[1].issues.map((issue) => issue.code)).not.toContain("duplicate_pending");
   });
 });

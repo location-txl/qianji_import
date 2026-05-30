@@ -1,5 +1,6 @@
 import type {
   AppConfig,
+  ExistingQianjiRecord,
   NormalizedTransaction,
   PreviewRow,
   QianjiTemplateRow,
@@ -10,6 +11,21 @@ import type {
 } from "./types";
 
 const ALLOWED_TYPES = new Set<TemplateType>(["收入", "支出", "报销", "转账", "还款"]);
+
+interface PreviewOptions {
+  from?: string;
+  to?: string;
+  existingRecords?: ExistingQianjiRecord[];
+}
+
+interface PreviewDraft {
+  transaction: NormalizedTransaction;
+  template: QianjiTemplateRow;
+  automaticIssues: RowIssue[];
+  validationIssues: RowIssue[];
+  override?: RowOverride;
+  duplicateKey: string;
+}
 
 function emptyTemplateRow(): QianjiTemplateRow {
   return {
@@ -31,6 +47,11 @@ function emptyTemplateRow(): QianjiTemplateRow {
 
 function amountText(amount: number): string {
   return amount.toFixed(2);
+}
+
+function amountCents(value: number | string): number | null {
+  const amount = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(amount) ? Math.round(amount * 100) : null;
 }
 
 function noteFor(transaction: NormalizedTransaction): string {
@@ -181,6 +202,33 @@ function validateTemplate(template: QianjiTemplateRow): RowIssue[] {
   return [];
 }
 
+function existingRecordKey(record: ExistingQianjiRecord): string {
+  const cents = amountCents(record.amount);
+  const account = record.account.trim();
+  return cents === null || !record.occurredAt || !account
+    ? ""
+    : [record.occurredAt.slice(0, 16), cents.toString(), account].join("|");
+}
+
+function templateDuplicateKey(template: QianjiTemplateRow): string {
+  const cents = amountCents(template.金额);
+  const account = template.账户1.trim();
+  return cents === null || !template.时间 || !account
+    ? ""
+    : [template.时间.slice(0, 16), cents.toString(), account].join("|");
+}
+
+function buildExistingCounts(records: ExistingQianjiRecord[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  records.forEach((record) => {
+    const key = existingRecordKey(record);
+    if (key) {
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  });
+  return counts;
+}
+
 /**
  * 将来源账单转换为可编辑的钱迹预览行，并把不能自动判定的记录留作人工处理。
  *
@@ -193,12 +241,12 @@ export function buildPreviewRows(
   transactions: NormalizedTransaction[],
   config: AppConfig,
   overrides: Record<string, RowOverride> = {},
-  dateFilter?: { from?: string; to?: string },
+  options?: PreviewOptions,
 ): PreviewRow[] {
   const dateFiltered = transactions.filter((t) => {
     const date = t.occurredAt.slice(0, 10);
-    if (dateFilter?.from && date < dateFilter.from) return false;
-    if (dateFilter?.to && date > dateFilter.to) return false;
+    if (options?.from && date < options.from) return false;
+    if (options?.to && date > options.to) return false;
     return true;
   });
 
@@ -207,8 +255,9 @@ export function buildPreviewRows(
     : dateFiltered;
 
   const specialIssues = collectSpecialIssues(transactions);
+  const existingCounts = buildExistingCounts(options?.existingRecords ?? []);
 
-  return filtered.map((transaction) => {
+  const drafts: PreviewDraft[] = filtered.map((transaction) => {
     const { category, subCategory } = resolveCategory(transaction, config);
     const template: QianjiTemplateRow = {
       ...emptyTemplateRow(),
@@ -237,25 +286,67 @@ export function buildPreviewRows(
 
     const override = overrides[transaction.id];
     const editedTemplate = { ...template, ...(override?.fields ?? {}) };
+    const duplicateKey = templateDuplicateKey(editedTemplate);
     const validationIssues = validateTemplate(editedTemplate);
-    const excluded = override?.include === false;
-    const canExport =
-      !excluded &&
-      validationIssues.length === 0 &&
-      (automaticIssues.length === 0 || override?.include === true);
-    const issues = excluded
-      ? [{ code: "excluded_by_user" as const, message: "已由用户从本次导出中排除。" }]
-      : [...automaticIssues, ...validationIssues];
 
     return {
-      id: transaction.id,
-      source: transaction.source,
       transaction,
       template: editedTemplate,
+      automaticIssues,
+      validationIssues,
+      override,
+      duplicateKey,
+    };
+  });
+
+  const candidateCounts = new Map<string, number>();
+  drafts.forEach((draft) => {
+    if (draft.duplicateKey && existingCounts.has(draft.duplicateKey)) {
+      candidateCounts.set(draft.duplicateKey, (candidateCounts.get(draft.duplicateKey) ?? 0) + 1);
+    }
+  });
+
+  return drafts.map((draft) => {
+    const existingCount = draft.duplicateKey ? existingCounts.get(draft.duplicateKey) ?? 0 : 0;
+    const candidateCount = draft.duplicateKey ? candidateCounts.get(draft.duplicateKey) ?? 0 : 0;
+    const duplicateDecision =
+      draft.override?.duplicateKey === draft.duplicateKey ? draft.override.duplicateExisting : undefined;
+    const duplicateExisting =
+      duplicateDecision === true ||
+      (duplicateDecision === undefined && existingCount > 0 && candidateCount > 0 && candidateCount <= existingCount);
+    const duplicatePending = duplicateDecision === undefined && existingCount > 0 && candidateCount > existingCount;
+    const duplicateIssues: RowIssue[] = duplicateExisting
+      ? [{
+          code: "duplicate_existing",
+          message: "钱迹已有记录，默认排除导出。",
+        }]
+      : duplicatePending
+        ? [{
+            code: "duplicate_pending",
+            message: "疑似重复记录需要确认。",
+          }]
+      : [];
+    const excluded = draft.override?.include === false;
+    const canExport =
+      !excluded &&
+      draft.validationIssues.length === 0 &&
+      ((draft.automaticIssues.length === 0 && duplicateIssues.length === 0) || draft.override?.include === true);
+    const issues = excluded
+      ? [{ code: "excluded_by_user" as const, message: "已由用户从本次导出中排除。" }]
+      : [...duplicateIssues, ...draft.automaticIssues, ...draft.validationIssues];
+
+    return {
+      id: draft.transaction.id,
+      source: draft.transaction.source,
+      transaction: draft.transaction,
+      template: draft.template,
       issues,
       canExport,
-      manuallyIncluded: override?.include === true,
-      manuallyEdited: Boolean(override),
+      manuallyIncluded: draft.override?.include === true,
+      manuallyEdited: Boolean(draft.override),
+      duplicateKey: draft.duplicateKey || undefined,
+      duplicateExistingCount: existingCount || undefined,
+      duplicateCandidateCount: candidateCount || undefined,
     };
   });
 }

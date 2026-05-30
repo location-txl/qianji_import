@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import type { NormalizedTransaction, SourcePlatform } from "./types";
+import type { ExistingQianjiRecord, NormalizedTransaction, SourcePlatform } from "./types";
 
 type SourceRecord = Record<string, string>;
 
@@ -8,9 +8,16 @@ function normalizeValue(value: unknown): string {
 }
 
 function parseAmount(value: string): number {
+  return parseOptionalAmount(value) ?? 0;
+}
+
+function parseOptionalAmount(value: string): number | null {
   const normalized = value.replace(/[¥￥,\s]/g, "");
+  if (!normalized) {
+    return null;
+  }
   const amount = Number.parseFloat(normalized);
-  return Number.isFinite(amount) ? amount : 0;
+  return Number.isFinite(amount) ? amount : null;
 }
 
 function formatDateTime(value: string): string {
@@ -120,4 +127,41 @@ export function parseWechatBuffer(data: ArrayBuffer): NormalizedTransaction[] {
   return recordsFromMatrix(matrix, headerIndex).map((row, index) =>
     createTransaction("wechat", headerIndex + index + 2, row),
   );
+}
+
+/**
+ * 解析钱迹导出的已有账单 CSV，只保留能参与去重的时间、金额和账户字段。
+ *
+ * @param data 浏览器读取到的钱迹 CSV 文件内容。
+ * @returns 可用于本次导入去重的已有钱迹记录。
+ * @throws 找不到钱迹账单表头时抛错。
+ */
+export function parseQianjiExistingCsvBuffer(data: ArrayBuffer): ExistingQianjiRecord[] {
+  const text = new TextDecoder("utf-8").decode(data).replace(/^\uFEFF/, "");
+  const workbook = XLSX.read(text, { type: "string", raw: true });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: true });
+  const headerIndex = matrix.findIndex((row) => {
+    const values = row.map(normalizeValue);
+    return values.includes("时间") && values.includes("金额") && values.includes("账户1");
+  });
+  if (headerIndex < 0) {
+    throw new Error("未找到钱迹账单表头，请上传钱迹导出的 CSV");
+  }
+
+  return recordsFromMatrix(matrix, headerIndex).flatMap((row, index) => {
+    const occurredAt = formatDateTime(row["时间"] ?? "");
+    const amount = parseOptionalAmount(row["金额"] ?? "");
+    const account = normalizeValue(row["账户1"]);
+    if (!occurredAt || amount === null || !account) {
+      return [];
+    }
+    return [{
+      id: normalizeValue(row.ID),
+      sourceRow: headerIndex + index + 2,
+      occurredAt,
+      amount,
+      account,
+    }];
+  });
 }
