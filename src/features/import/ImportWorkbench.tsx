@@ -114,6 +114,7 @@ export function ImportWorkbench() {
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, AICategorySuggestion>>({});
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
+  const [uncategorizedOnly, setUncategorizedOnly] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -149,8 +150,10 @@ export function ImportWorkbench() {
     [transactions, config, overrides, dateFrom, dateTo, existingRecords],
   );
   const readyRows = rows.filter((row) => row.canExport);
+  const uncategorizedReadyRows = readyRows.filter((row) => row.template.分类 === "");
   const duplicateRows = rows.filter(isDuplicateRow);
   const pendingRows = rows.filter((row) => !row.canExport && !isDuplicateRow(row));
+  const aiTargetRows = uncategorizedReadyRows;
   const duplicateConfirmGroups = useMemo(() => buildDuplicateConfirmGroups(rows), [rows]);
   const activeDuplicateGroup = duplicateConfirmGroups[0] ?? null;
   const hasActiveDuplicateGroup = Boolean(activeDuplicateGroup);
@@ -163,6 +166,9 @@ export function ImportWorkbench() {
     : new Set<string>();
   const visibleRows = rows.filter((row) => {
     if (filter === "ready" && !row.canExport) {
+      return false;
+    }
+    if (filter === "ready" && uncategorizedOnly && row.template.分类 !== "") {
       return false;
     }
     if (filter === "pending" && (row.canExport || isDuplicateRow(row))) {
@@ -385,7 +391,7 @@ export function ImportWorkbench() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          transactions: pendingRows.map((row) => row.transaction),
+          transactions: aiTargetRows.map((row) => row.transaction),
           config: {
             categoryRules: config.categoryRules,
             sourceCategoryMappings: config.sourceCategoryMappings,
@@ -606,7 +612,7 @@ export function ImportWorkbench() {
             <div className="mb-3 flex justify-between gap-4">
               <ToggleGroup
                 value={[filter]}
-                onValueChange={(value) => { if (value.length > 0) setFilter(value[0] as ViewFilter); }}
+                onValueChange={(value) => { if (value.length > 0) { setFilter(value[0] as ViewFilter); setUncategorizedOnly(false); } }}
                 variant="default"
                 spacing={0}
                 className="rounded-sm bg-[#f3ede3] p-[3px]"
@@ -624,6 +630,15 @@ export function ImportWorkbench() {
                   重复 {duplicateRows.length}
                 </ToggleGroupItem>
               </ToggleGroup>
+              {filter === "ready" && (
+                <label className="flex cursor-pointer items-center gap-1.5 text-sm">
+                  <Checkbox
+                    checked={uncategorizedOnly}
+                    onCheckedChange={(checked) => setUncategorizedOnly(checked === true)}
+                  />
+                  <span>仅未分类 ({uncategorizedReadyRows.length})</span>
+                </label>
+              )}
               <InputGroup className="max-w-[270px]">
                 <InputGroupInput
                   value={search}
@@ -664,11 +679,11 @@ export function ImportWorkbench() {
                   variant="outline"
                   type="button"
                   onClick={runAiCategorize}
-                  disabled={aiLoading || pendingRows.length === 0}
+                  disabled={aiLoading || aiTargetRows.length === 0}
                   className="gap-1.5"
                 >
                   <Sparkles className={cn("size-4", aiLoading && "animate-pulse")} />
-                  {aiLoading ? "AI 分析中..." : "AI 分析待处理"}
+                  {aiLoading ? "AI 分析中..." : "AI 分析未分类"}
                 </Button>
                 {aiSuggestionCount > 0 && (
                   <Button
@@ -684,9 +699,9 @@ export function ImportWorkbench() {
                 {aiError && (
                   <span className="ml-2 text-sm text-destructive">{aiError}</span>
                 )}
-                {!aiLoading && aiSuggestionCount === 0 && pendingRows.length > 0 && !aiError && (
+                {!aiLoading && aiSuggestionCount === 0 && aiTargetRows.length > 0 && !aiError && (
                   <span className="text-xs text-muted-foreground">
-                    AI 可自动识别待处理交易的分类并提取关键词
+                    AI 可自动识别可导出中未分类交易的分类并提取关键词
                   </span>
                 )}
               </div>
