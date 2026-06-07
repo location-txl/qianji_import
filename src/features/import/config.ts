@@ -70,6 +70,7 @@ function validateRule(value: unknown, index: number): CategoryRule {
     endTime,
     category,
     subCategory,
+    ...((rule as Record<string, unknown>).aiLearned === true ? { aiLearned: true } : {}),
   };
 }
 

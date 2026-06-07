@@ -22,7 +22,11 @@
 
 # local qianji configuration
 /data/config.json
+/data/ai-settings.json
 /data/*.tmp
+
+# codegraph
+/.codegraph
 
 # misc
 .DS_Store
@@ -43,3 +47,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+/.reasonix

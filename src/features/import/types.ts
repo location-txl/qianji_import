@@ -32,6 +32,7 @@ export interface CategoryRule {
   endTime: string;
   category: string;
   subCategory: string;
+  aiLearned?: boolean;
 }
 
 /**
@@ -54,6 +55,27 @@ export interface AppConfig {
   sourceCategoryMappings: Record<string, string>;
   categoryRules: CategoryRule[];
   excludeRules: ExcludeRule[];
+}
+
+/**
+ * AI 分类服务连接配置，持久化在 data/ai-settings.json。
+ */
+export interface AISettings {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  enabled: boolean;
+}
+
+/**
+ * AI 对单条交易的分类建议。
+ */
+export interface AICategorySuggestion {
+  transactionId: string;
+  category: string;
+  subCategory: string;
+  keywords: string[];
+  reasoning: string;
 }
 
 /**

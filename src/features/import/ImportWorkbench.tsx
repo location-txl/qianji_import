@@ -8,6 +8,7 @@ import { parseAlipayBuffer, parseQianjiExistingCsvBuffer, parseWechatBuffer } fr
 import { PreviewTable } from "./PreviewTable";
 import { buildPreviewRows } from "./transform";
 import type {
+  AICategorySuggestion,
   AppConfig,
   ExistingQianjiRecord,
   NormalizedTransaction,
@@ -27,7 +28,7 @@ import { InputGroup, InputGroupInput, InputGroupAddon } from "@/components/ui/in
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Download, Settings2 } from "lucide-react";
+import { Search, Download, Settings2, Sparkles, Check } from "lucide-react";
 
 type ViewFilter = "all" | "ready" | "pending" | "duplicate";
 
@@ -110,6 +111,9 @@ export function ImportWorkbench() {
   const [configMessage, setConfigMessage] = useState("");
   const [importMessage, setImportMessage] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, AICategorySuggestion>>({});
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -373,6 +377,123 @@ export function ImportWorkbench() {
     URL.revokeObjectURL(link.href);
   }
 
+  async function runAiCategorize() {
+    setAiLoading(true);
+    setAiError("");
+    try {
+      const response = await fetch("/api/ai-categorize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transactions: pendingRows.map((row) => row.transaction),
+          config: {
+            categoryRules: config.categoryRules,
+            sourceCategoryMappings: config.sourceCategoryMappings,
+          },
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.message ?? "AI 分析失败");
+      }
+      const suggestions = payload.suggestions as AICategorySuggestion[];
+      setAiSuggestions((current) => {
+        const next = { ...current };
+        for (const s of suggestions) {
+          next[s.transactionId] = s;
+        }
+        return next;
+      });
+    } catch (error) {
+      setAiError((error as Error).message);
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  function learnRulesFromSuggestions(suggestionMap: Record<string, AICategorySuggestion>) {
+    const existingSignatures = new Set(
+      config.categoryRules.map((r) => `${r.source}|${r.keyword}`),
+    );
+    const newRules: typeof config.categoryRules = [];
+
+    for (const [id, suggestion] of Object.entries(suggestionMap)) {
+      if (!suggestion.keywords.length) continue;
+      const tx = transactions.find((t) => t.id === id);
+      if (!tx) continue;
+
+      for (const keyword of suggestion.keywords) {
+        const sig = `${tx.source}|${keyword}`;
+        if (existingSignatures.has(sig)) continue;
+        existingSignatures.add(sig);
+        newRules.push({
+          id: crypto.randomUUID(),
+          source: tx.source,
+          keyword,
+          startTime: "",
+          endTime: "",
+          category: suggestion.category,
+          subCategory: suggestion.subCategory,
+          aiLearned: true,
+        });
+      }
+    }
+
+    if (newRules.length > 0) {
+      updateConfig({
+        ...config,
+        categoryRules: [...config.categoryRules, ...newRules],
+      });
+    }
+  }
+
+  function adoptAiSuggestion(id: string) {
+    const suggestion = aiSuggestions[id];
+    if (!suggestion) return;
+    setOverrides((current) => ({
+      ...current,
+      [id]: {
+        ...current[id],
+        fields: {
+          ...(current[id]?.fields ?? {}),
+          分类: suggestion.category,
+          ...(suggestion.subCategory ? { 二级分类: suggestion.subCategory } : {}),
+        },
+        include: true,
+      },
+    }));
+    learnRulesFromSuggestions({ [id]: suggestion });
+  }
+
+  function dismissAiSuggestion(id: string) {
+    setAiSuggestions((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+  }
+
+  function adoptAllAiSuggestions() {
+    setOverrides((current) => {
+      const next = { ...current };
+      for (const [id, suggestion] of Object.entries(aiSuggestions)) {
+        next[id] = {
+          ...next[id],
+          fields: {
+            ...(next[id]?.fields ?? {}),
+            分类: suggestion.category,
+            ...(suggestion.subCategory ? { 二级分类: suggestion.subCategory } : {}),
+          },
+          include: true,
+        };
+      }
+      return next;
+    });
+    learnRulesFromSuggestions(aiSuggestions);
+  }
+
+  const aiSuggestionCount = Object.keys(aiSuggestions).length;
+
   return (
     <main
       className="min-h-screen px-[clamp(18px,3.5vw,56px)] pb-12 pt-11 text-foreground"
@@ -536,6 +657,41 @@ export function ImportWorkbench() {
               <Button variant="ghost" size="sm" type="button" disabled={!selectedIds.size} onClick={() => setSelectedIds(new Set())} className="text-accent">清除选中</Button>
             </div>
 
+            {/* AI 分类工具栏 */}
+            {transactions.length > 0 && (
+              <div className="mb-3 flex items-center gap-2 rounded-sm border border-[#ddd5f0] bg-[#f8f5ff] p-[11px_12px]">
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={runAiCategorize}
+                  disabled={aiLoading || pendingRows.length === 0}
+                  className="gap-1.5"
+                >
+                  <Sparkles className={cn("size-4", aiLoading && "animate-pulse")} />
+                  {aiLoading ? "AI 分析中..." : "AI 分析待处理"}
+                </Button>
+                {aiSuggestionCount > 0 && (
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={adoptAllAiSuggestions}
+                    className="gap-1.5"
+                  >
+                    <Check className="size-4" />
+                    采纳全部 AI 建议 ({aiSuggestionCount})
+                  </Button>
+                )}
+                {aiError && (
+                  <span className="ml-2 text-sm text-destructive">{aiError}</span>
+                )}
+                {!aiLoading && aiSuggestionCount === 0 && pendingRows.length > 0 && !aiError && (
+                  <span className="text-xs text-muted-foreground">
+                    AI 可自动识别待处理交易的分类并提取关键词
+                  </span>
+                )}
+              </div>
+            )}
+
             {duplicateConfirmGroups.length > 0 && (
               <Alert className="mb-3 border-warning bg-warning text-warning-foreground">
                 <AlertTitle>{duplicateConfirmGroups.length} 组疑似重复需要确认。</AlertTitle>
@@ -561,6 +717,9 @@ export function ImportWorkbench() {
               onSelect={selectRow}
               onSelectAll={selectAll}
               onFieldChange={setRowField}
+              aiSuggestions={aiSuggestions}
+              onAdoptAiSuggestion={adoptAiSuggestion}
+              onDismissAiSuggestion={dismissAiSuggestion}
             />
           </CardContent>
         </Card>
