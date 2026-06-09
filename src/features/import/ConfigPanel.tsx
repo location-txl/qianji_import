@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { ChevronUp, ChevronDown, Trash2, X, Sparkles } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 interface ConfigPanelProps {
   config: AppConfig;
@@ -320,13 +321,20 @@ export function ConfigPanel({
         </DialogDescription>
       </DialogHeader>
 
-      <div className="flex flex-1 flex-col gap-0 overflow-y-auto">
+      <Tabs defaultValue="accounts" className="flex flex-1 flex-col gap-0 overflow-hidden">
         {message && (
-          <div className="mb-4 rounded-sm bg-primary/5 p-2.5 text-sm text-primary">{message}</div>
+          <div className="mx-1 mt-1 rounded-sm bg-primary/5 p-2.5 text-sm text-primary">{message}</div>
         )}
+        <TabsList variant="line" className="mx-1 shrink-0">
+          <TabsTrigger value="accounts">账户</TabsTrigger>
+          <TabsTrigger value="category">分类</TabsTrigger>
+          <TabsTrigger value="rules">分类规则</TabsTrigger>
+          <TabsTrigger value="exclude">排除规则</TabsTrigger>
+          <TabsTrigger value="ai">AI 设置</TabsTrigger>
+        </TabsList>
 
-        {/* 钱迹账户 */}
-        <div className="border-t border-border py-4">
+        {/* ── Tab: 账户 ── */}
+        <TabsContent value="accounts" className="flex-1 overflow-y-auto px-1 pb-4 pt-3">
           <h3 className="mb-3 text-sm font-bold">钱迹账户</h3>
           <div className="mb-3 flex flex-wrap gap-2">
             {config.accounts.map((account) => (
@@ -357,10 +365,37 @@ export function ConfigPanel({
               添加
             </Button>
           </div>
-        </div>
 
-        {/* 分类总表 */}
-        <div className="border-t border-border py-4">
+          {/* 支付方式映射 */}
+          <div className="mt-5 border-t border-border pt-4">
+            <h3 className="mb-3 text-sm font-bold">支付方式 → 钱迹账户</h3>
+            {paymentMethods.length === 0 ? (
+              <p className="text-xs text-muted-foreground leading-relaxed">上传账单后，支付方式会自动出现在这里。</p>
+            ) : (
+              <FieldGroup className="gap-2">
+                {paymentMethods.map((method, index) => (
+                  <Field key={method} orientation="horizontal" className="items-center gap-2">
+                    <FieldLabel htmlFor={`payment-mapping-${index}`} className="min-w-[100px] text-xs text-muted-foreground">
+                      {method}
+                    </FieldLabel>
+                    <Input
+                      id={`payment-mapping-${index}`}
+                      list="account-options"
+                      value={config.paymentMethodMappings[method] ?? ""}
+                      onChange={(event) => changeMapping("paymentMethodMappings", method, event.target.value)}
+                      placeholder="选择或输入账户"
+                      className="min-w-[130px] flex-1"
+                    />
+                  </Field>
+                ))}
+              </FieldGroup>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* ── Tab: 分类 ── */}
+        <TabsContent value="category" className="flex-1 overflow-y-auto px-1 pb-4 pt-3">
+          {/* 分类总表 */}
           <h3 className="mb-3 text-sm font-bold">分类总表</h3>
           <p className="mb-3 text-xs text-muted-foreground leading-relaxed">
             所有来源分类映射、自动分类规则和 AI 分类都从此列表中选取一级和二级分类。
@@ -446,75 +481,45 @@ export function ConfigPanel({
               添加
             </Button>
           </div>
-        </div>
 
-        {/* 付款方式 → 账户 */}
-        <div className="border-t border-border py-4">
-          <h3 className="mb-3 text-sm font-bold">付款方式 → 账户</h3>
-          {paymentMethods.length === 0 ? (
-            <p className="text-xs text-muted-foreground leading-relaxed">上传账单后，将在这里列出实际资金来源。</p>
-          ) : (
-            <FieldGroup className="gap-2">
-              {paymentMethods.map((method, index) => (
-                <Field key={method} orientation="horizontal" className="items-center gap-2">
-                  <FieldLabel
-                    htmlFor={`payment-method-mapping-${index}`}
-                    className="min-w-[112px] flex-1 truncate text-xs text-muted-foreground"
-                    title={method}
-                  >
-                    {method || "未提供"}
-                  </FieldLabel>
-                  <Input
-                    id={`payment-method-mapping-${index}`}
-                    list="account-options"
-                    value={config.paymentMethodMappings[method] ?? ""}
-                    onChange={(event) => changeMapping("paymentMethodMappings", method, event.target.value)}
-                    placeholder="选择或输入账户"
-                    className="min-w-[130px] flex-1"
-                  />
-                </Field>
-              ))}
-            </FieldGroup>
-          )}
-        </div>
+          {/* 来源分类 → 钱迹分类 */}
+          <div className="mt-5 border-t border-border pt-4">
+            <h3 className="mb-1 text-sm font-bold">来源分类 → 钱迹分类</h3>
+            <p className="mb-3 text-xs text-muted-foreground leading-relaxed">
+              用 <code className="font-mono">/</code> 分隔一级和二级分类，如 <code className="font-mono">餐饮/早餐</code>。
+            </p>
+            {categoryKeys.length === 0 ? (
+              <p className="text-xs text-muted-foreground leading-relaxed">支付宝分类会在上传后出现；微信可通过下方规则分类。</p>
+            ) : (
+              <FieldGroup className="gap-2">
+                {categoryKeys.map((key, index) => {
+                  const [source, category] = key.split(":");
+                  return (
+                    <Field key={key} orientation="horizontal" className="items-center gap-2">
+                      <FieldLabel
+                        htmlFor={`source-category-mapping-${index}`}
+                        className="min-w-[112px] flex-1 truncate text-xs text-muted-foreground"
+                      >
+                        {platformLabel(source as SourcePlatform)} / {category}
+                      </FieldLabel>
+                      <Input
+                        id={`source-category-mapping-${index}`}
+                        list="master-category-options"
+                        value={config.sourceCategoryMappings[key] ?? ""}
+                        onChange={(event) => changeMapping("sourceCategoryMappings", key, event.target.value)}
+                        placeholder="一级分类/二级分类"
+                        className="min-w-[130px] flex-1"
+                      />
+                    </Field>
+                  );
+                })}
+              </FieldGroup>
+            )}
+          </div>
+        </TabsContent>
 
-        {/* 来源分类 → 钱迹分类 */}
-        <div className="border-t border-border py-4">
-          <h3 className="mb-1 text-sm font-bold">来源分类 → 钱迹分类</h3>
-          <p className="mb-3 text-xs text-muted-foreground leading-relaxed">
-            用 <code className="font-mono">/</code> 分隔一级和二级分类，如 <code className="font-mono">餐饮/早餐</code>。
-          </p>
-          {categoryKeys.length === 0 ? (
-            <p className="text-xs text-muted-foreground leading-relaxed">支付宝分类会在上传后出现；微信可通过下方规则分类。</p>
-          ) : (
-            <FieldGroup className="gap-2">
-              {categoryKeys.map((key, index) => {
-                const [source, category] = key.split(":");
-                return (
-                  <Field key={key} orientation="horizontal" className="items-center gap-2">
-                    <FieldLabel
-                      htmlFor={`source-category-mapping-${index}`}
-                      className="min-w-[112px] flex-1 truncate text-xs text-muted-foreground"
-                    >
-                      {platformLabel(source as SourcePlatform)} / {category}
-                    </FieldLabel>
-                    <Input
-                      id={`source-category-mapping-${index}`}
-                      list="master-category-options"
-                      value={config.sourceCategoryMappings[key] ?? ""}
-                      onChange={(event) => changeMapping("sourceCategoryMappings", key, event.target.value)}
-                      placeholder="一级分类/二级分类"
-                      className="min-w-[130px] flex-1"
-                    />
-                  </Field>
-                );
-              })}
-            </FieldGroup>
-          )}
-        </div>
-
-        {/* 自动分类规则 */}
-        <div className="border-t border-border py-4">
+        {/* ── Tab: 分类规则 ── */}
+        <TabsContent value="rules" className="flex-1 overflow-y-auto px-1 pb-4 pt-3">
           <div className="mb-1 flex items-start justify-between gap-3">
             <h3 className="text-sm font-bold">自动分类规则</h3>
             <Button variant="ghost" size="sm" type="button" onClick={addRule} className="text-accent">
@@ -598,10 +603,10 @@ export function ConfigPanel({
               <p className="text-xs text-muted-foreground leading-relaxed">尚未添加条件规则，来源分类映射仍会照常应用。</p>
             )}
           </div>
-        </div>
+        </TabsContent>
 
-        {/* 排除规则 */}
-        <div className="border-t border-border py-4">
+        {/* ── Tab: 排除规则 ── */}
+        <TabsContent value="exclude" className="flex-1 overflow-y-auto px-1 pb-4 pt-3">
           <div className="mb-1 flex items-start justify-between gap-3">
             <h3 className="text-sm font-bold">排除规则</h3>
             <Button variant="ghost" size="sm" type="button" onClick={addExcludeRule} className="text-accent">
@@ -668,10 +673,10 @@ export function ConfigPanel({
               <p className="text-xs text-muted-foreground leading-relaxed">尚未添加排除规则，所有交易将正常参与分类。</p>
             )}
           </div>
-        </div>
+        </TabsContent>
 
-        {/* AI 智能分类设置 */}
-        <div className="border-t border-border py-4">
+        {/* ── Tab: AI 设置 ── */}
+        <TabsContent value="ai" className="flex-1 overflow-y-auto px-1 pb-4 pt-3">
           <div className="mb-1 flex items-center gap-2">
             <Sparkles className="size-4 text-accent" />
             <h3 className="text-sm font-bold">AI 智能分类</h3>
@@ -752,8 +757,8 @@ export function ConfigPanel({
               )}
             </div>
           </div>
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
 
       <DialogFooter>
         <div className="flex items-center gap-3">
