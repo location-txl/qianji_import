@@ -53,7 +53,12 @@ export.ts → Qianji CSV 下载
 
 - `src/features/import/types.ts` — 所有 TypeScript 类型定义
 - `src/features/import/ImportWorkbench.tsx` — 主页面组件（~425 行）
-- `src/features/import/ConfigPanel.tsx` — 配置面板（浮动弹窗）
+- `src/features/import/ConfigPanel.tsx` — 配置面板壳（Tabs 容器 + datalists + footer）
+- `src/features/import/config-tabs/AccountsTab.tsx` — 账户 tab（钱迹账户 + 付款方式映射）
+- `src/features/import/config-tabs/CategoryTab.tsx` — 分类 tab（分类总表 + 来源分类映射）
+- `src/features/import/config-tabs/CategoryRulesTab.tsx` — 分类规则 tab
+- `src/features/import/config-tabs/ExcludeRulesTab.tsx` — 排除规则 tab
+- `src/features/import/config-tabs/AiSettingsTab.tsx` — AI 设置 tab
 - `src/features/import/PreviewTable.tsx` — 可编辑预览表格
 - `src/features/import/ai-store.ts` — AI 设置持久化（读写 data/ai-settings.json）
 - `src/app/api/ai-settings/route.ts` — AI 设置 API（GET/PUT，脱敏返回）
