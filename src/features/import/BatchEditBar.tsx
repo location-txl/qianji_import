@@ -28,7 +28,7 @@ export function BatchEditBar({
       <strong className="mr-1.5 whitespace-nowrap text-[13px]">
         批量处理 {selectedCount ? `(${selectedCount})` : ""}
       </strong>
-      <Input value={batch.分类} onChange={(event) => onBatchChange({ ...batch, 分类: event.target.value })} placeholder="分类" />
+      <Input list="master-category-options" value={batch.分类} onChange={(event) => onBatchChange({ ...batch, 分类: event.target.value })} placeholder="分类" />
       <select name="batch-type" aria-label="批量设置类型" value={batch.类型} onChange={(event) => onBatchChange({ ...batch, 类型: event.target.value })} className="h-[34px] rounded-sm border border-input bg-white px-2 text-sm">
         <option value="">类型不改</option>
         <option value="收入">收入</option>

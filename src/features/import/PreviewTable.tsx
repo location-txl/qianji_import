@@ -1,6 +1,6 @@
 "use client";
 
-import { QIANJI_HEADERS, type AICategorySuggestion, type PreviewRow, type QianjiHeader } from "./types";
+import { QIANJI_HEADERS, type AICategorySuggestion, type MasterCategory, type PreviewRow, type QianjiHeader } from "./types";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ interface PreviewTableProps {
   onSelect: (id: string, checked: boolean) => void;
   onSelectAll: (checked: boolean) => void;
   onFieldChange: (id: string, field: QianjiHeader, value: string) => void;
+  masterCategories?: MasterCategory[];
   aiSuggestions?: Record<string, AICategorySuggestion>;
   onAdoptAiSuggestion?: (id: string) => void;
   onDismissAiSuggestion?: (id: string) => void;
@@ -66,6 +67,7 @@ function TemplateInput({
   row,
   header,
   onChange,
+  masterCategories,
   aiSuggestion,
   onAdoptAi,
   onDismissAi,
@@ -73,21 +75,36 @@ function TemplateInput({
   row: PreviewRow;
   header: QianjiHeader;
   onChange: (id: string, field: QianjiHeader, value: string) => void;
+  masterCategories?: MasterCategory[];
   aiSuggestion?: AICategorySuggestion;
   onAdoptAi?: () => void;
   onDismissAi?: () => void;
 }) {
+  const categoryListId = masterCategories && masterCategories.length > 0 ? `mc-cat-${row.id}` : undefined;
+  const subCategoryListId = masterCategories && masterCategories.length > 0 ? `mc-sub-${row.id}` : undefined;
+
+  // 查找当前行一级分类对应的二级分类
+  const currentCategory = row.template.分类;
+  const matchedCategory = masterCategories?.find((mc) => mc.category === currentCategory);
+  const subCategoriesForCurrent = matchedCategory?.subCategories ?? [];
+
   // 分类列：显示 AI 建议 badge
   if (header === "分类" && aiSuggestion && onAdoptAi && onDismissAi) {
     return (
       <div>
         <Input
+          list={categoryListId}
           value={row.template[header]}
           onChange={(event) => onChange(row.id, header, event.target.value)}
           aria-label={`${sourceName(row)} ${header}`}
           className="h-8 min-w-[105px] bg-white/75 text-xs"
         />
         <AiSuggestionBadge suggestion={aiSuggestion} onAdopt={onAdoptAi} onDismiss={onDismissAi} />
+        {categoryListId && (
+          <datalist id={categoryListId}>
+            {masterCategories!.map((mc) => <option key={mc.category} value={mc.category} />)}
+          </datalist>
+        )}
       </div>
     );
   }
@@ -106,17 +123,34 @@ function TemplateInput({
     );
   }
 
+  const datalistId = header === "分类" ? categoryListId
+    : header === "二级分类" ? subCategoryListId
+    : header === "账户1" || header === "账户2" ? "account-options"
+    : undefined;
+
   return (
-    <Input
-      list={header === "账户1" || header === "账户2" ? "account-options" : undefined}
-      value={row.template[header]}
-      onChange={(event) => onChange(row.id, header, event.target.value)}
-      aria-label={`${sourceName(row)} ${header}`}
-      className={cn(
-        "h-8 min-w-[105px] bg-white/75 text-xs",
-        header === "备注" && "min-w-[270px]",
+    <>
+      <Input
+        list={datalistId}
+        value={row.template[header]}
+        onChange={(event) => onChange(row.id, header, event.target.value)}
+        aria-label={`${sourceName(row)} ${header}`}
+        className={cn(
+          "h-8 min-w-[105px] bg-white/75 text-xs",
+          header === "备注" && "min-w-[270px]",
+        )}
+      />
+      {header === "分类" && masterCategories && masterCategories.length > 0 && (
+        <datalist id={categoryListId}>
+          {masterCategories.map((mc) => <option key={mc.category} value={mc.category} />)}
+        </datalist>
       )}
-    />
+      {header === "二级分类" && subCategoriesForCurrent.length > 0 && (
+        <datalist id={subCategoryListId}>
+          {subCategoriesForCurrent.map((sub) => <option key={sub} value={sub} />)}
+        </datalist>
+      )}
+    </>
   );
 }
 
@@ -126,6 +160,7 @@ export function PreviewTable({
   onSelect,
   onSelectAll,
   onFieldChange,
+  masterCategories,
   aiSuggestions,
   onAdoptAiSuggestion,
   onDismissAiSuggestion,
@@ -188,6 +223,7 @@ export function PreviewTable({
                       row={row}
                       header={header}
                       onChange={onFieldChange}
+                      masterCategories={masterCategories}
                       aiSuggestion={header === "分类" ? suggestion : undefined}
                       onAdoptAi={header === "分类" && suggestion ? () => onAdoptAiSuggestion?.(row.id) : undefined}
                       onDismissAi={header === "分类" && suggestion ? () => onDismissAiSuggestion?.(row.id) : undefined}

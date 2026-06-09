@@ -57,7 +57,7 @@ describe("POST /api/ai-categorize", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         transactions,
-        config: config ?? { categoryRules: [], sourceCategoryMappings: {} },
+        config: config ?? { categoryRules: [], sourceCategoryMappings: {}, masterCategories: [] },
       }),
     });
     return POST(request);
@@ -148,6 +148,7 @@ describe("POST /api/ai-categorize", () => {
     await callRoute([tx], {
       categoryRules: [{ id: "1", source: "all", keyword: "美团", startTime: "", endTime: "", category: "餐饮", subCategory: "外卖" }],
       sourceCategoryMappings: { "alipay:餐饮美食": "餐饮/正餐" },
+      masterCategories: [{ category: "餐饮", subCategories: ["外卖", "正餐"] }],
     });
 
     const fetchCall = mockFetch.mock.calls[0];
@@ -156,6 +157,8 @@ describe("POST /api/ai-categorize", () => {
     expect(userMessage).toContain("美团");
     expect(userMessage).toContain("餐饮/外卖");
     expect(userMessage).toContain("餐饮/正餐");
+    expect(userMessage).toContain("可用分类列表");
+    expect(userMessage).toContain("餐饮：外卖、正餐");
   });
 
   it("skips invalid entries in AI response", async () => {

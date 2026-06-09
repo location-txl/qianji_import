@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { readAISettings } from "@/features/import/ai-store";
-import type { AICategorySuggestion, AppConfig, NormalizedTransaction } from "@/features/import/types";
+import type { AICategorySuggestion, AppConfig, MasterCategory, NormalizedTransaction } from "@/features/import/types";
 
 export const runtime = "nodejs";
 
 interface RequestBody {
   transactions: NormalizedTransaction[];
-  config: Pick<AppConfig, "categoryRules" | "sourceCategoryMappings">;
+  config: Pick<AppConfig, "categoryRules" | "sourceCategoryMappings" | "masterCategories">;
 }
 
 /**
@@ -30,9 +30,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     // 限制单次请求量，避免 token 超限
     const transactions = body.transactions.slice(0, 50);
 
-    const config = body.config ?? { categoryRules: [], sourceCategoryMappings: {} };
+    const config = body.config ?? { categoryRules: [], sourceCategoryMappings: {}, masterCategories: [] };
     const existingCategories = buildExistingCategories(config);
-    const prompt = buildCategorizePrompt(transactions, existingCategories);
+    const masterCategoryList = buildMasterCategoryList(config.masterCategories);
+    const prompt = buildCategorizePrompt(transactions, existingCategories, masterCategoryList);
 
     const url = `${settings.baseUrl.replace(/\/+$/, "")}/chat/completions`;
     const response = await fetch(url, {
@@ -87,12 +88,13 @@ export async function POST(request: Request): Promise<NextResponse> {
 const SYSTEM_PROMPT = `你是一个中国个人记账分类助手。用户使用"钱迹"记账 App，你需要根据交易信息判断其应该归入的分类。
 
 规则：
-1. 参考用户已有的分类体系和规则习惯来分类
-2. 如果已有规则能匹配，优先使用已有规则的分类
-3. 为每条交易提取 1-3 个最短可独立匹配同类交易的关键词（中文，不含空格）
-4. 关键词要求：能覆盖同类商户/场景的最短子串，例如"美团外卖"→"美团"，"瑞幸咖啡"→"瑞幸"，"星巴克"→"星巴克"
-5. 不要使用过于宽泛的词如"支付""消费""转账"
-6. 返回严格 JSON 格式`;
+1. 如果用户提供了「可用分类列表」，**必须且只能从该列表中选取**一级分类和二级分类，不得自创分类
+2. 参考用户已有的分类体系和规则习惯来分类
+3. 如果已有规则能匹配，优先使用已有规则的分类
+4. 为每条交易提取 1-3 个最短可独立匹配同类交易的关键词（中文，不含空格）
+5. 关键词要求：能覆盖同类商户/场景的最短子串，例如"美团外卖"→"美团"，"瑞幸咖啡"→"瑞幸"，"星巴克"→"星巴克"
+6. 不要使用过于宽泛的词如"支付""消费""转账"
+7. 返回严格 JSON 格式`;
 
 function buildExistingCategories(config: RequestBody["config"]): string {
   const parts: string[] = [];
@@ -113,7 +115,18 @@ function buildExistingCategories(config: RequestBody["config"]): string {
   return parts.length > 0 ? `\n\n用户已有分类体系：\n${parts.join("\n\n")}` : "";
 }
 
-function buildCategorizePrompt(transactions: NormalizedTransaction[], existingCategories: string): string {
+function buildMasterCategoryList(masterCategories: MasterCategory[]): string {
+  if (!masterCategories || masterCategories.length === 0) return "";
+  const lines = masterCategories.map((mc) => {
+    if (mc.subCategories.length > 0) {
+      return `  ${mc.category}：${mc.subCategories.join("、")}`;
+    }
+    return `  ${mc.category}`;
+  });
+  return `\n\n可用分类列表（必须从中选取，不得自创）：\n${lines.join("\n")}`;
+}
+
+function buildCategorizePrompt(transactions: NormalizedTransaction[], existingCategories: string, masterCategoryList: string): string {
   const lines = transactions.map((t, index) => {
     return [
       `[${index}]`,
@@ -127,7 +140,7 @@ function buildCategorizePrompt(transactions: NormalizedTransaction[], existingCa
     ].join(" | ");
   });
 
-  return `请对以下 ${transactions.length} 条交易进行分类。${existingCategories}
+  return `请对以下 ${transactions.length} 条交易进行分类。${existingCategories}${masterCategoryList}
 
 交易列表：
 ${lines.join("\n")}
@@ -148,8 +161,7 @@ ${lines.join("\n")}
 要求：
 - 每条交易都必须有对应的建议
 - index 与交易列表的编号对应
-- keywords 是能匹配同类交易的最短关键词数组（1-3个）
-- 一级分类使用钱迹常见分类如：餐饮、交通、购物、娱乐、医疗、教育、居住、通讯、人情、工资、理财 等`;
+- keywords 是能匹配同类交易的最短关键词数组（1-3个）${masterCategoryList ? "\n- 一级分类和二级分类必须从「可用分类列表」中选取" : "\n- 一级分类使用钱迹常见分类如：餐饮、交通、购物、娱乐、医疗、教育、居住、通讯、人情、工资、理财 等"}`;
 }
 
 // ── 响应解析 ──

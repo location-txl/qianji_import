@@ -1,6 +1,58 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_CONFIG, parseAppConfig } from "./config";
-import type { AppConfig } from "./types";
+import type { AppConfig, MasterCategory } from "./types";
+
+/**
+ * 从已有的 sourceCategoryMappings 和 categoryRules 中提取分类，
+ * 迁移生成 masterCategories（仅在 masterCategories 为空时执行）。
+ */
+export function migrateMasterCategories(config: AppConfig): { migrated: AppConfig; changed: boolean } {
+  if (config.masterCategories.length > 0) {
+    return { migrated: config, changed: false };
+  }
+
+  const categoryMap = new Map<string, Set<string>>();
+
+  // 从 sourceCategoryMappings 值中提取（格式："一级分类/二级分类" 或 "一级分类"）
+  for (const value of Object.values(config.sourceCategoryMappings)) {
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    const parts = trimmed.split("/");
+    const category = parts[0].trim();
+    if (!category) continue;
+    if (!categoryMap.has(category)) categoryMap.set(category, new Set());
+    if (parts.length > 1) {
+      const sub = parts[1].trim();
+      if (sub) categoryMap.get(category)!.add(sub);
+    }
+  }
+
+  // 从 categoryRules 中提取
+  for (const rule of config.categoryRules) {
+    const category = rule.category.trim();
+    if (!category) continue;
+    if (!categoryMap.has(category)) categoryMap.set(category, new Set());
+    if (rule.subCategory.trim()) {
+      categoryMap.get(category)!.add(rule.subCategory.trim());
+    }
+  }
+
+  if (categoryMap.size === 0) {
+    return { migrated: config, changed: false };
+  }
+
+  const masterCategories: MasterCategory[] = Array.from(categoryMap.entries())
+    .map(([category, subs]) => ({
+      category,
+      subCategories: Array.from(subs).sort((a, b) => a.localeCompare(b, "zh-CN")),
+    }))
+    .sort((a, b) => a.category.localeCompare(b.category, "zh-CN"));
+
+  return {
+    migrated: { ...config, masterCategories },
+    changed: true,
+  };
+}
 
 export function useConfigManager() {
   const [config, setConfig] = useState<AppConfig>(structuredClone(DEFAULT_CONFIG));
@@ -20,7 +72,11 @@ export function useConfigManager() {
       })
       .then((savedConfig) => {
         if (active) {
-          setConfig(savedConfig);
+          const { migrated, changed } = migrateMasterCategories(savedConfig);
+          setConfig(migrated);
+          if (changed) {
+            setDirty(true);
+          }
         }
       })
       .catch((error: Error) => {

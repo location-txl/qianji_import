@@ -107,6 +107,7 @@ export function useAiCategorize(
           config: {
             categoryRules: config.categoryRules,
             sourceCategoryMappings: config.sourceCategoryMappings,
+            masterCategories: config.masterCategories,
           },
         }),
       });

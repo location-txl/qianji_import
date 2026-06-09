@@ -47,6 +47,14 @@ export interface ExcludeRule {
 }
 
 /**
+ * 钱迹分类总表中的一项，包含一级分类及其下属二级分类。
+ */
+export interface MasterCategory {
+  category: string;
+  subCategories: string[];
+}
+
+/**
  * 本机持久化配置；账单明细和编辑草稿不会写入该结构。
  */
 export interface AppConfig {
@@ -55,6 +63,7 @@ export interface AppConfig {
   sourceCategoryMappings: Record<string, string>;
   categoryRules: CategoryRule[];
   excludeRules: ExcludeRule[];
+  masterCategories: MasterCategory[];
 }
 
 /**

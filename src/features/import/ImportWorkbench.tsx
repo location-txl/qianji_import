@@ -301,6 +301,7 @@ export function ImportWorkbench() {
               onSelect={selectRow}
               onSelectAll={selectAll}
               onFieldChange={setRowField}
+              masterCategories={config.masterCategories}
               aiSuggestions={aiSuggestions}
               onAdoptAiSuggestion={adoptAiSuggestion}
               onDismissAiSuggestion={dismissAiSuggestion}
@@ -308,6 +309,14 @@ export function ImportWorkbench() {
           </CardContent>
         </Card>
       </div>
+
+      {/* 全局 datalist：供 BatchEditBar 和其他不在 ConfigPanel 中的输入使用 */}
+      <datalist id="master-category-options">
+        {config.masterCategories.map((mc) => <option key={mc.category} value={mc.category} />)}
+      </datalist>
+      <datalist id="master-subcategory-options">
+        {config.masterCategories.flatMap((mc) => mc.subCategories).filter((v, i, a) => a.indexOf(v) === i).sort((l, r) => l.localeCompare(r, "zh-CN")).map((sub) => <option key={sub} value={sub} />)}
+      </datalist>
 
       {/* 浮动映射规则按钮 */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
