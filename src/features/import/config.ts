@@ -1,4 +1,4 @@
-import type { AppConfig, CategoryRule, ExcludeRule, SourcePlatform } from "./types";
+import type { AppConfig, CategoryRule, ExcludeRule, MasterCategory, SourcePlatform } from "./types";
 
 export const COMMON_ACCOUNT_OPTIONS:string[] = [];
 
@@ -12,6 +12,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   sourceCategoryMappings: {},
   categoryRules: [],
   excludeRules: [],
+  masterCategories: [],
 };
 
 const SOURCES = new Set<SourcePlatform | "all">(["all", "alipay", "wechat"]);
@@ -70,6 +71,7 @@ function validateRule(value: unknown, index: number): CategoryRule {
     endTime,
     category,
     subCategory,
+    ...((rule as Record<string, unknown>).aiLearned === true ? { aiLearned: true } : {}),
   };
 }
 
@@ -99,6 +101,25 @@ function validateExcludeRule(value: unknown, index: number): ExcludeRule {
     startTime,
     endTime,
   };
+}
+
+function validateMasterCategories(value: unknown): MasterCategory[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const result: MasterCategory[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const obj = entry as Record<string, unknown>;
+    if (typeof obj.category !== "string" || !obj.category.trim()) continue;
+    const subCategories = Array.isArray(obj.subCategories)
+      ? (obj.subCategories as unknown[])
+          .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+          .map((s) => s.trim())
+      : [];
+    result.push({ category: obj.category.trim(), subCategories });
+  }
+  return result;
 }
 
 /**
@@ -139,6 +160,8 @@ export function parseAppConfig(value: unknown): AppConfig {
     ? input.excludeRules.map(validateExcludeRule)
     : [];
 
+  const masterCategories = validateMasterCategories(input.masterCategories);
+
   const accountSet = new Set([...accounts, ...COMMON_ACCOUNT_OPTIONS]);
   Object.values(paymentMethodMappings).forEach((account) => accountSet.add(account));
 
@@ -148,5 +171,6 @@ export function parseAppConfig(value: unknown): AppConfig {
     sourceCategoryMappings,
     categoryRules,
     excludeRules,
+    masterCategories,
   };
 }

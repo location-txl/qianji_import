@@ -32,6 +32,7 @@ export interface CategoryRule {
   endTime: string;
   category: string;
   subCategory: string;
+  aiLearned?: boolean;
 }
 
 /**
@@ -46,6 +47,14 @@ export interface ExcludeRule {
 }
 
 /**
+ * 钱迹分类总表中的一项，包含一级分类及其下属二级分类。
+ */
+export interface MasterCategory {
+  category: string;
+  subCategories: string[];
+}
+
+/**
  * 本机持久化配置；账单明细和编辑草稿不会写入该结构。
  */
 export interface AppConfig {
@@ -54,6 +63,28 @@ export interface AppConfig {
   sourceCategoryMappings: Record<string, string>;
   categoryRules: CategoryRule[];
   excludeRules: ExcludeRule[];
+  masterCategories: MasterCategory[];
+}
+
+/**
+ * AI 分类服务连接配置，持久化在 data/ai-settings.json。
+ */
+export interface AISettings {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  enabled: boolean;
+}
+
+/**
+ * AI 对单条交易的分类建议。
+ */
+export interface AICategorySuggestion {
+  transactionId: string;
+  category: string;
+  subCategory: string;
+  keywords: string[];
+  reasoning: string;
 }
 
 /**
